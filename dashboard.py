@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+import utils
 
 
 def data_collect_panel(notebook):
@@ -9,53 +10,62 @@ def data_collect_panel(notebook):
     notebook.add(tab, text='数据采集综合面板')
     notebook.pack(fill='both', expand=True)
 
-    collect_data_radio = tk.StringVar()
+    # collect data
     collect_data_frame = tk.Frame(data_collect_frame)
     collect_data_frame.pack(anchor='w')
     ttk.Label(collect_data_frame, text='行情采集').pack(side='left')
-    collect_data_radio1 = ttk.Radiobutton(collect_data_frame, text='采集', variable=collect_data_radio, value='yes').pack(side='left')
-    collect_data_radio2 = ttk.Radiobutton(collect_data_frame, text='停止采集', variable=collect_data_radio, value='no').pack(side='left')
-    collect_data_set = ttk.Button(collect_data_frame, text='修改').pack(side='left')
-    collect_data_apply = ttk.Button(collect_data_frame, text='应用').pack()
+    collect_data_radio1 = ttk.Radiobutton(collect_data_frame, text='采集', variable=collect_data_radio, value='yes', state='disabled')
+    collect_data_radio2 = ttk.Radiobutton(collect_data_frame, text='停止采集', variable=collect_data_radio, value='no', state='disabled')
+    collect_data_set = ttk.Button(collect_data_frame, text='修改', command=lambda: utils.activate_widget(collect_data_radio1, collect_data_radio2, collect_data_apply))
+    collect_data_apply = ttk.Button(collect_data_frame, text='应用', state='disabled', command=lambda: utils.disable_widget(collect_data_radio1, collect_data_radio2, collect_data_apply))
 
-    manual_collect_radio = tk.StringVar()
+    collect_data_radio1.pack(side='left')
+    collect_data_radio2.pack(side='left')
+    collect_data_set.pack(side='left')
+    collect_data_apply.pack()
+
     manual_collect_frame = tk.Frame(data_collect_frame)
     manual_collect_frame.pack(anchor='w')
     ttk.Label(manual_collect_frame, text='手动回补数据').pack(side='left')
-    manual_collect_radio1 = ttk.Radiobutton(manual_collect_frame, text='开始回补', variable=manual_collect_radio, value='auto').pack(side='left')
-    manual_collect_radio2 = ttk.Radiobutton(manual_collect_frame, text='停止回补', variable=manual_collect_radio, value='manual').pack(side='left')
-    manual_collect_set = ttk.Button(manual_collect_frame, text='修改').pack(side='left')
-    manual_collect_apply = ttk.Button(manual_collect_frame, text='应用').pack()
+    manual_collect_radio1 = ttk.Radiobutton(manual_collect_frame, text='开始回补', variable=manual_collect_radio, value='start', state='disabled')
+    manual_collect_radio2 = ttk.Radiobutton(manual_collect_frame, text='停止回补', variable=manual_collect_radio, value='stop', state='disabled')
+    manual_collect_set = ttk.Button(manual_collect_frame, text='修改', command=lambda: utils.activate_widget(manual_collect_radio1, manual_collect_radio2, manual_collect_apply))
+    manual_collect_apply = ttk.Button(manual_collect_frame, text='应用', state='disabled', command=lambda: utils.disable_widget(manual_collect_radio1, manual_collect_radio2, manual_collect_apply))
+
+    manual_collect_radio1.pack(side='left')
+    manual_collect_radio2.pack(side='left')
+    manual_collect_set.pack(side='left')
+    manual_collect_apply.pack()
 
     fixed_threshold_frame = tk.Frame(data_collect_frame)
     fixed_threshold_frame.pack(anchor='w')
     ttk.Label(fixed_threshold_frame, text='固定值破位低').pack(side='left')
-    fixed_threshold_entry1 = ttk.Entry(fixed_threshold_frame).pack(side='left')
+    fixed_threshold_entry1 = ttk.Entry(fixed_threshold_frame, state='disabled').pack(side='left')
     ttk.Label(fixed_threshold_frame, text='固定值破位高').pack(side='left')
-    fixed_threshold_entry2 = ttk.Entry(fixed_threshold_frame).pack(side='left')
+    fixed_threshold_entry2 = ttk.Entry(fixed_threshold_frame, state='disabled').pack(side='left')
     fixed_threshold_set = ttk.Button(fixed_threshold_frame, text='修改').pack(side='left')
-    fixed_threshold_apply = ttk.Button(fixed_threshold_frame, text='应用').pack()
+    fixed_threshold_apply = ttk.Button(fixed_threshold_frame, text='应用', state='disabled').pack()
 
     interval_threshold_frame = tk.Frame(data_collect_frame)
     interval_threshold_frame.pack(anchor='w')
     ttk.Label(interval_threshold_frame, text='间隔止损报警位').pack(side='left')
-    interval_threshold_entry = ttk.Entry(interval_threshold_frame).pack(side='left')
+    interval_threshold_entry = ttk.Entry(interval_threshold_frame, state='disabled').pack(side='left')
     interval_threshold_set = ttk.Button(interval_threshold_frame, text='修改').pack(side='left')
-    interval_threshold_apply = ttk.Button(interval_threshold_frame, text='应用').pack()
+    interval_threshold_apply = ttk.Button(interval_threshold_frame, text='应用', state='disabled').pack()
 
     moving_threshold_frame = tk.Frame(data_collect_frame)
     moving_threshold_frame.pack(anchor='w')
     ttk.Label(moving_threshold_frame, text='移动止损报警位').pack(side='left')
-    moving_threshold_entry = ttk.Entry(moving_threshold_frame).pack(side='left')
+    moving_threshold_entry = ttk.Entry(moving_threshold_frame, state='disabled').pack(side='left')
     moving_threshold_set = ttk.Button(moving_threshold_frame, text='修改').pack(side='left')
-    moving_threshold_apply = ttk.Button(moving_threshold_frame, text='应用').pack()
+    moving_threshold_apply = ttk.Button(moving_threshold_frame, text='应用', state='disabled').pack()
 
     email_frame = tk.Frame(data_collect_frame)
     email_frame.pack(anchor='w')
     ttk.Label(email_frame, text='邮箱地址').pack(side='left')
     email_entry = ttk.Entry(email_frame, state='disabled').pack(side='left')
     email_set = ttk.Button(email_frame, text='修改').pack(side='left')
-    email_apply = ttk.Button(email_frame, text='应用').pack()
+    email_apply = ttk.Button(email_frame, text='应用', state='disabled').pack()
 
     alarm_frame = ttk.LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')
@@ -85,14 +95,19 @@ def ontime_data_view_panel(notebook):
 
 
 def main():
-    root = tk.Tk()
+    style = ttk.Style()
+    style.map('TEntry', bordercolor=[('disabled', 'red')])
+
     notebook_control = ttk.Notebook(root)
     notebook_view = ttk.Notebook(root)
-
     data_collect_panel(notebook_control)
     buy_sell_panel(notebook_control)
     ontime_data_view_panel(notebook_view)
     root.mainloop()
 
+
 if __name__ == '__main__':
+    root = tk.Tk()
+    collect_data_radio = tk.StringVar(value='no')
+    manual_collect_radio = tk.StringVar(value='stop')
     main()
