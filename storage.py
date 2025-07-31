@@ -29,12 +29,34 @@ class DB:
             self._conn = sqlite3.connect(db_path)
         return self._conn
 
+    @conn.setter
+    def conn(self, v):
+        self._conn = v
+
     @property
     def cursor(self):
         if not self._cursor:
             self._cursor = self.conn.cursor()
         return self._cursor
 
+    @cursor.setter
+    def cursor(self, v):
+        self._cursor = v
+
+    def close(self):
+        try:
+            self.cursor.close()
+            self.conn.close()
+        except Exception as e:
+            logger.exception('try to close db inst cursor or conn error: %s', e)
+
+    def reload(self):
+        self.conn = sqlite3.connect(db_path)
+        self.cursor = self.conn.cursor()
+
+    def execute(self, cmd):
+        self.cursor.execute(cmd)
+        self.conn.commit()
 
 def create_table_wave_rate():
     cmd = '''
@@ -53,7 +75,7 @@ def create_table_wave_rate():
     daily_wave_rate real,
     wave_rate_year real);
     '''
-    db_inst.cursor.execute(cmd)
+    db_inst.execute(cmd)
 
 
 def get_conn():
