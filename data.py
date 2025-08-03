@@ -1,3 +1,5 @@
+import concurrent
+
 import okx.PublicData
 import okx.MarketData
 
@@ -5,7 +7,7 @@ import utils
 
 logger = utils.get_logger()
 
-FLAG = 1    # 0: real trade, 1: simulate trade
+FLAG = '1'    # 0: real trade, 1: simulate trade
 
 
 def get_all_coin_name(coin_type='SWAP'):
@@ -17,7 +19,7 @@ def get_all_coin_name(coin_type='SWAP'):
         if not rst['code']:
             logger.error('get coin name error. return code is %s, error occur: %s', rst['code'], rst['msg'])
             raise Exception('get coin name error')
-        coin_names = [i for i in {j['instId'] for j in rst['data'] if ('usdt' in j['instId'].lower() and j['instFamily'] == 'SWAP')}]
+        coin_names = [i for i in {j['instId'] for j in rst['data'] if ('usdt' in j['instId'].lower() and j['instType'] == 'SWAP')}]
         coin_names.sort()
     except Exception as e:
         logger.exception('get all coin name via public data api error: %s', e)
@@ -25,21 +27,33 @@ def get_all_coin_name(coin_type='SWAP'):
         return coin_names
 
 
-def get_kline_data(timespan=15):
+def get_kline_data(timespan=30):
     """
     /api/v5/market/candles
-    get recently 15 days coin kline data
+    get recently {timespan} days coin kline data
     """
     coin_names = get_all_coin_name()
+    print(f'len coin_names: {len(coin_names)}')
     if not coin_names:
         logger.error('try to get all coin names but result is empty. can not continue get k line data')
     marketdata_api = okx.MarketData.MarketAPI(flag=FLAG)
     coin_kline_data = {}
+
+    def get_coin_kline(coin_name_inner):
+        resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan)
+        if int(resp['code']):
+            # logger.error('get coin %s kline data error: %s', coin_name_inner, resp['msg'])
+            logger.error('get coin %s kline data error: %s', coin_name_inner, resp['data'])
+        else:
+            coin_kline_data[coin_name_inner] = [i[:5] for i in resp['data']]
+
     try:
-        for coin_name in coin_names:
-            rst = marketdata_api.get_candlesticks(instId=coin_name, bar='1D', limit=timespan)
-            coin_kline_data[coin_name] = rst['data']
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(get_coin_kline, coin_name) for coin_name in coin_names]
+            for _ in concurrent.futures.as_completed(futures):
+                pass
     except Exception as e:
         logger.exception('get coin kline data error: %s', e)
     finally:
+        print(f'len kline data: {len(coin_kline_data)}')
         return coin_kline_data
