@@ -72,20 +72,20 @@ def data_collect_panel(notebook):
     email_set = ttk.Button(email_frame, text='修改').pack(side='left')
     email_apply = ttk.Button(email_frame, text='应用', state='disabled').pack()
 
+    export_frame = tk.Frame(data_collect_frame)
+    export_frame.pack(anchor='w')
+    ttk.Label(export_frame, text='导出数据excel').pack(side='left')
+    for k, v in export_data_vars.items():
+        ttk.Checkbutton(export_frame, variable=v, onvalue=True, offvalue=False, text=k).pack(side='left')
+    ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars)).pack()
+
     alarm_frame = ttk.LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')
 
-    alarm_data = (
-        ('采集数据缺失', tk.BooleanVar(value=False)),
-        ('间隔止损报警', tk.BooleanVar(value=False)),
-        ('固定止损报警', tk.BooleanVar(value=False)),
-        ('移动止损报警', tk.BooleanVar(value=True)),
-    )
-    for k, v in alarm_data:
+    for k, v in alarm_data_vars.items():
         tmp_frame = tk.Frame(alarm_frame)
         tmp_frame.pack(anchor='w')
-        ttk.Label(tmp_frame, text=k).pack(side='left')
-        ttk.Checkbutton(tmp_frame, variable=tk.BooleanVar(value=True), onvalue=True, offvalue=False).pack(side='left')
+        ttk.Checkbutton(tmp_frame, variable=v, onvalue=True, offvalue=False, text=k).pack(side='left')
 
 
 def buy_sell_panel(notebook):
@@ -116,8 +116,9 @@ def wave_rate_view(tab):
     tree = ttk.Treeview(container, columns=list(data.columns), show='headings')
 
     col_width = {'wave_rate_year': 200, 'coin_type': 200}
+    col_name_map = {'rank': '排名', 'coin_type': '币种类型', 'wave_rate_year': '年化波动率', 'timestamp': '日期'}
     for col in data.columns:
-        tree.heading(col, text=col)
+        tree.heading(col, text=col_name_map[col])
         tree.column(col, width=col_width.get(col, 100), anchor='center')
 
     for _, row in data.iterrows():
@@ -161,4 +162,14 @@ if __name__ == '__main__':
     root = tk.Tk()
     collect_data_radio = tk.StringVar(value='no')
     manual_collect_radio = tk.StringVar(value='stop')
+    export_data_vars = {
+        '年化波动率': tk.BooleanVar(value=True),
+        '币种止损数据': tk.BooleanVar(value=False),
+    }
+    alarm_data_vars = {
+        '采集数据缺失': tk.BooleanVar(value=True),
+        '间隔止损报警': tk.BooleanVar(value=True),
+        '固定止损报警': tk.BooleanVar(value=True),
+        '移动止损报警': tk.BooleanVar(value=True),
+    }
     main()

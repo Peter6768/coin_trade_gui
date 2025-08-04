@@ -148,6 +148,12 @@ class DB:
             rst.append(sub_df)
         return pd.concat(rst)
 
+    def export_data(self, export_data_vars):
+        if export_data_vars['年化波动率']:
+            pass
+        if export_data_vars['币种止损数据']:
+            pass
+
 
 def get_conn():
     return db_inst.conn
