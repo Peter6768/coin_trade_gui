@@ -95,9 +95,54 @@ def buy_sell_panel(notebook):
 
 
 def ontime_data_view_panel(notebook):
-    tab = ttk.Frame(notebook)
-    notebook.add(tab, text='实时数据监控面板')
+    wave_rate_tab = ttk.Frame(notebook)
+    notebook.add(wave_rate_tab, text='年华波动率视图')
     notebook.pack(fill='both', expand=True)
+    wave_rate_view(wave_rate_tab)
+
+    stop_loss_tab = ttk.Frame(notebook)
+    notebook.add(stop_loss_tab, text='止损数据视图')
+    notebook.pack(fill='both', expand=True)
+    stop_loss_view(stop_loss_tab)
+
+
+def wave_rate_view(tab):
+    data = storage.db_inst.get_recent_wave_data()
+    container = ttk.Frame(tab)
+    container.pack(fill='y', expand=True)
+    container.grid_columnconfigure(0, weight=1)
+    container.grid_columnconfigure(2, weight=1)
+    # container.pack(expand=True)
+    tree = ttk.Treeview(container, columns=list(data.columns), show='headings')
+
+    col_width = {'wave_rate_year': 200, 'coin_type': 200}
+    for col in data.columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=col_width.get(col, 100), anchor='center')
+
+    for _, row in data.iterrows():
+        tree.insert('', tk.END, values=list(row))
+
+    bar_vertical = ttk.Scrollbar(container, orient='vertical', command=tree.yview)
+    tree.configure(yscrollcommand=bar_vertical.set)
+
+    tree.grid(row=0, column=1, sticky="nsew")
+    bar_vertical.grid(row=0, column=2, sticky='ns')
+
+
+def stop_loss_view(tab):
+    container = ttk.Frame(tab)
+    container.pack(fill='y', expand=True)
+    container.grid_columnconfigure(0, weight=1)
+    container.grid_columnconfigure(2, weight=1)
+
+    tree = ttk.Treeview(container, columns=[], show='headings')
+
+    bar_vertical = ttk.Scrollbar(container, orient='vertical', command=tree.yview)
+    tree.configure(yscrollcommand=bar_vertical.set)
+
+    tree.grid(row=0, column=1, sticky="nsew")
+    bar_vertical.grid(row=0, column=2, sticky='ns')
 
 
 def main():

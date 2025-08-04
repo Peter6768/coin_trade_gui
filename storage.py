@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import pprint
+import datetime as dt
 
 import pandas as pd
 
@@ -126,10 +127,26 @@ class DB:
                     v.extend(['null'] * 4)
                 else:
                     wave_sum = sum([v_tmp[6] for v_tmp in values[index - 14: index]])
-                    avg_wave = round(wave_sum / wave_coef, ndigits=8)
-                    daily_wave_rate = round(avg_wave / float(v[4]) * 100, ndigits=8)
-                    wave_rate_year = daily_wave_rate * wave_coef_year
+                    avg_wave = round(wave_sum / wave_coef, ndigits=6)
+                    daily_wave_rate = round(avg_wave / float(v[4]) * 100, ndigits=6)
+                    wave_rate_year = round(daily_wave_rate * wave_coef_year, ndigits=6)
                     v.extend([avg_wave, wave_sum, daily_wave_rate, wave_rate_year])
+
+    def get_newest_date(self):
+        return self.execute('select max(timestamp) from wave_rate;')[0][0]
+
+    def get_recent_wave_data(self, dayspan=3):
+        end_date = self.get_newest_date()
+        start_date = end_date - 24 * 3600 * dayspan
+        df = pd.read_sql('select timestamp, coin_type, wave_rate_year from wave_rate where timestamp >= %s and timestamp < %s' % (start_date, end_date), self.conn)
+        rst = []
+        for timestamp in sorted([i.item() for i in df['timestamp'].unique()], reverse=True):
+            sub_df = df[df['timestamp'] == timestamp].copy()
+            sub_df.sort_values(by='wave_rate_year', ascending=False, inplace=True)
+            sub_df['rank'] = range(1, len(sub_df) + 1)
+            sub_df['timestamp'] = sub_df['timestamp'].map(lambda x: dt.datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
+            rst.append(sub_df)
+        return pd.concat(rst)
 
 
 def get_conn():
