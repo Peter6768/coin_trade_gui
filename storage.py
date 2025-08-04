@@ -20,6 +20,23 @@ class DB:
     def __init__(self):
         self._conn = None
         self._cursor = None
+        self.data_clean_timespan = 30
+        self.wave_rate_col_name_map = {
+            'timestamp': '日期',
+            'coin_type': '币种名称',
+            'begin_price': '开盘价',
+            'max_price': '最高价',
+            'min_price': '最低价',
+            'last_price': '收盘价',
+            'daily_wave': '每日波幅',
+            'wave_sum': '14天波幅汇总',
+            'wave_coef': '波动系数',
+            'wave_coef_year': '年化波动系数',
+            'avg_wave': '平均波幅',
+            'daily_wave_rate': '每日波动率',
+            'wave_rate_year': '年化波动率'
+        }
+
         if not os.path.exists(db_path):
             logger.info('db file %s not exist, try to create.', db_path)
             try:
@@ -148,9 +165,45 @@ class DB:
             rst.append(sub_df)
         return pd.concat(rst)
 
+    def clean_wave_rate_old_data(self):
+        newest_date = self.execute('select max(timestamp) from wave_rate;')[0][0]
+        date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
+        self.execute('delete from wave_rate where timestamp < %s' % date_clean)
+        logger.info('success clean wave rate data before date %s', dt.datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
+
     def export_data(self, export_data_vars):
+        self.clean_wave_rate_old_data()
         if export_data_vars['年化波动率']:
-            pass
+            df = pd.read_sql('select * from wave_rate;', self.conn)
+            max_date = df['timestamp'].max()
+            table_name = '年华波动率数据%s.xlsx' % dt.datetime.now().strftime('%Y-%m-%d')
+            # table_name = '年化波动率数据.xlsx'
+            # table_name = os.path.realpath('abcde.xlsx')
+            if os.path.exists(table_name):
+                logger.info('table %s already exist, try to delte and create a new one', table_name)
+                os.remove(table_name)
+            with pd.ExcelWriter(table_name, engine='xlsxwriter') as writer:
+                def handle_output_format(sheet_name, df_inner):
+                    worksheet = writer.sheets[sheet_name]
+                    for col_num, value in enumerate(df_inner.columns.values):
+                        worksheet.write(0, col_num, value, output_format)
+                workbook = writer.book
+                output_format = workbook.add_format({'bold': False, 'border': 0})
+                wave_rate_rank_col_names = ['timestamp', 'wave_rate_year', 'coin_type']
+                coin_rank_sheet = df[df['timestamp'] == max_date].copy()[wave_rate_rank_col_names]
+                coin_rank_sheet.sort_values(by='wave_rate_year', ascending=False, inplace=True)
+                coin_rank_sheet['rank'] = range(1, len(coin_rank_sheet) + 1)
+                coin_rank_sheet['timestamp'] = dt.datetime.fromtimestamp(max_date).strftime('%Y-%m-%d')
+                coin_rank_sheet.rename(columns={**{k: v for k, v in self.wave_rate_col_name_map.items() if k in wave_rate_rank_col_names}, 'rank': '年华波动率排名'}, inplace=True)
+                coin_rank_sheet.to_excel(writer, sheet_name='年化波动率排名', index=False)
+                handle_output_format('年化波动率排名', coin_rank_sheet)
+                for coin_name in sorted(df['coin_type'].unique()):
+                    coin_sheet = df[df['coin_type'] == coin_name].copy()
+                    coin_sheet.sort_values(by='timestamp', ascending=True, inplace=True)
+                    coin_sheet['timestamp'] = coin_sheet['timestamp'].map(lambda x: dt.datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
+                    coin_sheet.rename(columns={**self.wave_rate_col_name_map, 'rank': '排名'}, inplace=True)
+                    coin_sheet.to_excel(writer, sheet_name=coin_name, index=False)
+                    handle_output_format(coin_name, coin_sheet)
         if export_data_vars['币种止损数据']:
             pass
 
