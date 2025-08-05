@@ -28,7 +28,7 @@ def get_all_coin_name(coin_type='SWAP'):
         return coin_names
 
 
-def get_kline_data(timespan=30):
+def get_kline_data(timespan=30, after=None):
     """
     /api/v5/market/candles
     get recently {timespan} days coin kline data
@@ -40,7 +40,7 @@ def get_kline_data(timespan=30):
     coin_kline_data = {}
 
     def get_coin_kline(coin_name_inner):
-        resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan)
+        resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, after=after)
         if int(resp['code']):
             # logger.error('get coin %s kline data error: %s', coin_name_inner, resp['msg'])
             logger.error('get coin %s kline data error: %s', coin_name_inner, resp['data'])

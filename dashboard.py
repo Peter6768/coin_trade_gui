@@ -1,9 +1,12 @@
+import threading
+import time
+import datetime as dt
+
 import tkinter as tk
 from tkinter import ttk
 
 import utils
 import storage
-import data
 
 logger = utils.get_logger()
 
@@ -146,6 +149,25 @@ def stop_loss_view(tab):
     bar_vertical.grid(row=0, column=2, sticky='ns')
 
 
+def update_wave_rate_task():
+    # update wave rate data every day from 00:01:00 to 00:02:00
+    def update_wave_rate_data():
+        while True:
+            now = dt.datetime.now()
+            seconds = now.hour * 3600 + now.minute * 60 + now.second
+            if 60 < seconds <= 120:
+                logger.info('periodically update wave rate data')
+                storage.db_inst.update_wave_rate_date()
+                # with open('testabc', 'a+') as f:
+                # f.write("abcde")
+            time.sleep(60)
+    threading.Thread(target=update_wave_rate_data, daemon=True).start()
+
+
+def thread_tasks():
+    update_wave_rate_task()
+
+
 def main():
     style = ttk.Style()
     style.map('TEntry', bordercolor=[('disabled', 'red')])
@@ -155,6 +177,7 @@ def main():
     data_collect_panel(notebook_control)
     buy_sell_panel(notebook_control)
     ontime_data_view_panel(notebook_view)
+    thread_tasks()
     root.mainloop()
 
 

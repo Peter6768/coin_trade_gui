@@ -120,13 +120,15 @@ class DB:
         row_num = self.execute('select count(*) from wave_rate;')[0][0]
         if row_num == 0:
             logger.info('table wave_rate is empty, try to initialize')
-            logger.info('table wave_rate not empty. try to update new data')
             kline_data = data.get_kline_data()
             self.handle_kline_data(kline_data)
             cmd = ('insert into wave_rate (timestamp,begin_price,max_price,min_price,last_price,coin_type,daily_wave,wave_sum,avg_wave,daily_wave_rate,wave_rate_year) values ' +
                    ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s)' % tuple(v)) for _, values in kline_data.items() for v in values]) +
                    ';')
             self.execute(cmd)
+        else:
+            logger.info('table wave_rate not empty. try to update new data')
+            pass
 
     def handle_kline_data(self, kline_data):
         # todo: use pandas, not use dict
@@ -177,8 +179,6 @@ class DB:
             df = pd.read_sql('select * from wave_rate;', self.conn)
             max_date = df['timestamp'].max()
             table_name = '年华波动率数据%s.xlsx' % dt.datetime.now().strftime('%Y-%m-%d')
-            # table_name = '年化波动率数据.xlsx'
-            # table_name = os.path.realpath('abcde.xlsx')
             if os.path.exists(table_name):
                 logger.info('table %s already exist, try to delte and create a new one', table_name)
                 os.remove(table_name)
@@ -206,6 +206,10 @@ class DB:
                     handle_output_format(coin_name, coin_sheet)
         if export_data_vars['币种止损数据']:
             pass
+
+    def update_wave_rate_date(self):
+        newest_timestamp = self.get_newest_date()
+        newest_data = data.get_kline_data(newest_timestamp)
 
 
 def get_conn():
