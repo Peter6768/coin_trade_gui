@@ -50,27 +50,21 @@ class DB:
 
     @staticmethod
     def execute(cmd):
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute(cmd)
-        except Exception as e:
-            logger.exception('cursor execute cmd %s occur error: %s', cmd, e)
-            return []
-        rst = []
-        try:
-            conn.commit()
-            rst = cursor.fetchall()
-            cursor.close()
-            conn.close()
-        except Exception as e:
-            logger.exception('conn commit cmd %s occur error: %s', cmd, e)
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(cmd)
+        conn.commit()
+        rst = cursor.fetchall()
+        cursor.close()
+        conn.close()
         return rst
 
     @staticmethod
     def execute_df(cmd):
         conn = sqlite3.connect(db_path)
-        return pd.read_sql(cmd, conn)
+        rst = pd.read_sql(cmd, conn)
+        conn.close()
+        return rst
 
     def create_table_wave_rate(self):
         cmd = '''
@@ -92,9 +86,7 @@ class DB:
         self.execute(cmd)
 
     def init_wave_data(self):
-        tmp = self.execute('select count(*) from wave_rate;')
-        print(tmp)
-        row_num = tmp
+        row_num = self.execute('select count(*) from wave_rate;')[0][0]
         if row_num == 0:
             logger.info('table wave_rate is empty, try to initialize')
             kline_data = data.get_kline_data()
@@ -107,7 +99,8 @@ class DB:
             logger.info('table wave_rate not empty. try to update new data')
             pass
 
-    def handle_kline_data(self, kline_data):
+    @staticmethod
+    def handle_kline_data(kline_data):
         # todo: use pandas, not use dict
         for coin_name in kline_data:
             values = kline_data[coin_name]
@@ -134,7 +127,7 @@ class DB:
     def get_recent_wave_data(self, dayspan=3):
         end_date = self.get_newest_date()
         start_date = end_date - 24 * 3600 * dayspan
-        df = pd.read_sql('select timestamp, coin_type, wave_rate_year from wave_rate where timestamp >= %s and timestamp < %s' % (start_date, end_date), self.conn)
+        df = self.execute_df('select timestamp, coin_type, wave_rate_year from wave_rate where timestamp >= %s and timestamp < %s' % (start_date, end_date))
         rst = []
         for timestamp in sorted([i.item() for i in df['timestamp'].unique()], reverse=True):
             sub_df = df[df['timestamp'] == timestamp].copy()
@@ -153,7 +146,7 @@ class DB:
     def export_data(self, export_data_vars):
         self.clean_wave_rate_old_data()
         if export_data_vars['年化波动率']:
-            df = pd.read_sql('select * from wave_rate;', self.conn)
+            df = self.execute_df('select * from wave_rate;')
             max_date = df['timestamp'].max()
             table_name = '年华波动率数据%s.xlsx' % dt.datetime.now().strftime('%Y-%m-%d')
             if os.path.exists(table_name):
@@ -187,10 +180,6 @@ class DB:
     def update_wave_rate_date(self):
         newest_timestamp = self.get_newest_date()
         newest_data = data.get_kline_data(newest_timestamp)
-
-
-def get_conn():
-    return db_inst.conn
 
 
 db_inst = DB()
