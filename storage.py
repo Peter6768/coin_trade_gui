@@ -18,8 +18,6 @@ wave_coef_year = 19.1
 
 class DB:
     def __init__(self):
-        self._conn = None
-        self._cursor = None
         self.data_clean_timespan = 30
         self.wave_rate_col_name_map = {
             'timestamp': '日期',
@@ -48,54 +46,31 @@ class DB:
         else:
             logger.info('db file %s already exist, skip init db', db_path)
         self.create_table_wave_rate()
-        self.init_wave_data()
+        # self.init_wave_data()
 
-    @property
-    def conn(self):
-        if not self._conn:
-            self._conn = sqlite3.connect(db_path)
-        return self._conn
-
-    @conn.setter
-    def conn(self, v):
-        self._conn = v
-
-    @property
-    def cursor(self):
-        if not self._cursor:
-            self._cursor = self.conn.cursor()
-        return self._cursor
-
-    @cursor.setter
-    def cursor(self, v):
-        self._cursor = v
-
-    def close(self):
+    @staticmethod
+    def execute(cmd):
         try:
-            self.cursor.close()
-            self.conn.close()
-        except Exception as e:
-            logger.exception('try to close db inst cursor or conn error: %s', e)
-
-    def reload(self):
-        self.conn = sqlite3.connect(db_path)
-        self.cursor = self.conn.cursor()
-
-    def execute(self, cmd):
-        try:
-            self.cursor.execute(cmd)
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(cmd)
         except Exception as e:
             logger.exception('cursor execute cmd %s occur error: %s', cmd, e)
             return []
+        rst = []
         try:
-            self.conn.commit()
+            conn.commit()
+            rst = cursor.fetchall()
+            cursor.close()
+            conn.close()
         except Exception as e:
             logger.exception('conn commit cmd %s occur error: %s', cmd, e)
-            return []
-        return self.cursor.fetchall()
+        return rst
 
-    def execute_df(self, cmd):
-        return pd.read_sql(cmd, self.conn)
+    @staticmethod
+    def execute_df(cmd):
+        conn = sqlite3.connect(db_path)
+        return pd.read_sql(cmd, conn)
 
     def create_table_wave_rate(self):
         cmd = '''
@@ -117,12 +92,14 @@ class DB:
         self.execute(cmd)
 
     def init_wave_data(self):
-        row_num = self.execute('select count(*) from wave_rate;')[0][0]
+        tmp = self.execute('select count(*) from wave_rate;')
+        print(tmp)
+        row_num = tmp
         if row_num == 0:
             logger.info('table wave_rate is empty, try to initialize')
             kline_data = data.get_kline_data()
             self.handle_kline_data(kline_data)
-            cmd = ('insert into wave_rate (timestamp,begin_price,max_price,min_price,last_price,coin_type,daily_wave,wave_sum,avg_wave,daily_wave_rate,wave_rate_year) values ' +
+            cmd = ('insert into wave_rate (timestamp,begin_price,max_price,min_price,last_price,coin_type,daily_wave,avg_wave,wave_sum,daily_wave_rate,wave_rate_year) values ' +
                    ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s)' % tuple(v)) for _, values in kline_data.items() for v in values]) +
                    ';')
             self.execute(cmd)

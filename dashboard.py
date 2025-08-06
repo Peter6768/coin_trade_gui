@@ -101,7 +101,7 @@ def ontime_data_view_panel(notebook):
     wave_rate_tab = ttk.Frame(notebook)
     notebook.add(wave_rate_tab, text='年华波动率视图')
     notebook.pack(fill='both', expand=True)
-    wave_rate_view(wave_rate_tab)
+    threading.Thread(target=wave_rate_view, daemon=True, args=(wave_rate_tab, )).start()
 
     stop_loss_tab = ttk.Frame(notebook)
     notebook.add(stop_loss_tab, text='止损数据视图')
@@ -110,6 +110,7 @@ def ontime_data_view_panel(notebook):
 
 
 def wave_rate_view(tab):
+    storage.db_inst.init_wave_data()
     data = storage.db_inst.get_recent_wave_data()
     container = ttk.Frame(tab)
     container.pack(fill='y', expand=True)

@@ -8,7 +8,7 @@ import utils
 
 logger = utils.get_logger()
 
-FLAG = '1'    # 0: real trade, 1: simulate trade
+FLAG = '0'    # 0: real trade, 1: simulate trade
 
 
 def get_all_coin_name(coin_type='SWAP'):
