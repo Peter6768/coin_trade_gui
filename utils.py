@@ -3,6 +3,7 @@ import logging
 
 LOG_PATH = os.path.join(os.path.realpath('.'), 'trade.log')
 
+
 def get_logger():
     log_path_real = os.path.realpath(LOG_PATH)
     if not os.path.exists(log_path_real):
@@ -20,7 +21,11 @@ def get_logger():
 
     return logger
 
-def activate_widget(*args):
+
+def activate_widget(*args, **kwargs):
+    if kwargs.get('special', {}):
+        for k, v in kwargs.get('special').items():
+            k['state'] = v
     for i in args:
         i['state'] = 'normal'
 

@@ -96,6 +96,37 @@ def data_collect_panel(notebook):
         ttk.Checkbutton(export_frame, variable=v, onvalue=True, offvalue=False, text=k).pack(side='left')
     ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars)).pack(side='right')
 
+    def load_ontime_coin_type_thread():
+        try:
+            count = 1
+            while count <= 10:
+                coin_types = storage.db_inst.execute('select distinct coin_type from wave_rate;')
+                if len(coin_types) == 0:
+                    time.sleep(15)
+                    count += 1
+                    continue
+                else:
+                    coin_types = [item[0] for item in coin_types]
+                    coin_types.sort()
+                    ontime_coin_type_combo['values'] = coin_types
+                    ontime_coin_type_combo.set(coin_types[0])
+                    return
+        except Exception as e:
+            logger.exception('load ontime coin type error: %s', e)
+
+    ontime_coin_type_frame = tk.Frame(data_collect_frame)
+    ontime_coin_type_frame.pack(anchor='w', fill='x')
+    ttk.Label(ontime_coin_type_frame, text='止损数据币种类型').pack(side='left')
+    ontime_coin_type_combo = ttk.Combobox(ontime_coin_type_frame, state='disabled')
+    ontime_coin_type_combo.set('加载中')
+    ontime_coin_type_combo.pack(side='left')
+    ontime_coin_type_set = ttk.Button(ontime_coin_type_frame, text='修改', command=lambda: utils.activate_widget(ontime_coin_type_apply, special={ontime_coin_type_combo: 'readonly'}))
+    ontime_coin_type_set.pack(side='right')
+    ontime_coin_type_apply = ttk.Button(ontime_coin_type_frame, text='应用', state='disabled',
+                                        command=lambda: utils.disable_widget(ontime_coin_type_combo, ontime_coin_type_apply))
+    ontime_coin_type_apply.pack(side='right')
+    threading.Thread(target=load_ontime_coin_type_thread, daemon=True).start()
+
     alarm_frame = ttk.LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')
 
@@ -131,24 +162,24 @@ def wave_rate_view(tab):
     container = ttk.Frame(tab)
     container.pack(fill='both', expand=True)
     container.grid_rowconfigure(0, weight=1)
-    container.grid_columnconfigure(0, weight=1)
-    # container.grid_columnconfigure(1, weight=1)
-    # container.grid_columnconfigure(2, weight=1)
+    # container.grid_columnconfigure(0, weight=1)
     # container.pack(expand=True)
     for index, daily_data in enumerate(data):
         tree = ttk.Treeview(container, columns=list(daily_data.columns), show='headings')
 
-        col_width = {'wave_rate_year': 200, 'coin_type': 200}
+        col_width = {'wave_rate_year': 60, 'coin_type': 100, 'rank': 50}
         col_name_map = {'rank': '排名', 'coin_type': '币种类型', 'wave_rate_year': '年化波动率', 'timestamp': '日期'}
         for col in daily_data.columns:
             tree.heading(col, text=col_name_map[col])
-            tree.column(col, width=col_width.get(col, 100), anchor='center')
+            tree.column(col, width=col_width.get(col, 80), anchor='center')
+            # tree.column(col, anchor='center')
 
         for _, row in daily_data.iterrows():
             tree.insert('', tk.END, values=list(row))
 
         bar_vertical = ttk.Scrollbar(container, orient='vertical', command=tree.yview)
         tree.configure(yscrollcommand=bar_vertical.set)
+        container.columnconfigure(2 * index, weight=1)
 
         tree.grid(row=0, column=2 * index, sticky="nsew")
         bar_vertical.grid(row=0, column=2 * index + 1, sticky='ns')

@@ -47,6 +47,7 @@ class DB:
         else:
             logger.info('db file %s already exist, skip init db', db_path)
         self.create_table_wave_rate()
+        self.create_table_ontime_kline()
         # self.init_wave_data()
 
     @staticmethod
@@ -86,6 +87,24 @@ class DB:
         '''
         self.execute(cmd)
 
+    def create_table_ontime_kline(self):
+        cmd = '''
+        create table if not exists ontime_kline(
+        coin_type text not null,
+        timestamp integer not null,
+        begin_price real not null,
+        min_price real not null,
+        max_price real not null,
+        last_price real not null,
+        today_max real not null,
+        today_min real not null,
+        dot_neg_num integer,
+        dot_pos_num integer,
+        dot_final integer,
+        dot_op_type text);
+        '''
+        self.execute(cmd)
+
     def init_wave_data(self):
         row_num = self.execute('select count(*) from wave_rate;')[0][0]
         if row_num == 0:
@@ -96,6 +115,7 @@ class DB:
                    ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s)' % tuple(v)) for _, values in kline_data.items() for v in values]) +
                    ';')
             self.execute(cmd)
+            messagebox.showinfo('提示', '初始化数据完成')
         else:
             logger.info('table wave_rate not empty. try to update new data')
             pass

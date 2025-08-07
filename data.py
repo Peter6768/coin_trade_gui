@@ -47,7 +47,7 @@ def get_kline_data(timespan=30, after=None):
             if code == 50011:
                 logger.info('request for %s kline data frequency too fast, retry no.%s time', coin_name_inner, count)
                 count += 1
-                time.sleep(1.1)
+                time.sleep(2)
                 continue
             elif code:
                 logger.error('get coin %s kline data error: %s', coin_name_inner, resp['data'])
