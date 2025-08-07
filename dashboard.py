@@ -3,6 +3,7 @@ import time
 import datetime as dt
 
 import tkinter as tk
+from tkinter import messagebox
 from tkinter import ttk
 
 import utils
@@ -128,26 +129,29 @@ def wave_rate_view(tab):
     storage.db_inst.init_wave_data()
     data = storage.db_inst.get_recent_wave_data()
     container = ttk.Frame(tab)
-    container.pack(fill='y', expand=True)
+    container.pack(fill='both', expand=True)
+    container.grid_rowconfigure(0, weight=1)
     container.grid_columnconfigure(0, weight=1)
-    container.grid_columnconfigure(2, weight=1)
+    # container.grid_columnconfigure(1, weight=1)
+    # container.grid_columnconfigure(2, weight=1)
     # container.pack(expand=True)
-    tree = ttk.Treeview(container, columns=list(data.columns), show='headings')
+    for index, daily_data in enumerate(data):
+        tree = ttk.Treeview(container, columns=list(daily_data.columns), show='headings')
 
-    col_width = {'wave_rate_year': 200, 'coin_type': 200}
-    col_name_map = {'rank': '排名', 'coin_type': '币种类型', 'wave_rate_year': '年化波动率', 'timestamp': '日期'}
-    for col in data.columns:
-        tree.heading(col, text=col_name_map[col])
-        tree.column(col, width=col_width.get(col, 100), anchor='center')
+        col_width = {'wave_rate_year': 200, 'coin_type': 200}
+        col_name_map = {'rank': '排名', 'coin_type': '币种类型', 'wave_rate_year': '年化波动率', 'timestamp': '日期'}
+        for col in daily_data.columns:
+            tree.heading(col, text=col_name_map[col])
+            tree.column(col, width=col_width.get(col, 100), anchor='center')
 
-    for _, row in data.iterrows():
-        tree.insert('', tk.END, values=list(row))
+        for _, row in daily_data.iterrows():
+            tree.insert('', tk.END, values=list(row))
 
-    bar_vertical = ttk.Scrollbar(container, orient='vertical', command=tree.yview)
-    tree.configure(yscrollcommand=bar_vertical.set)
+        bar_vertical = ttk.Scrollbar(container, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=bar_vertical.set)
 
-    tree.grid(row=0, column=1, sticky="nsew")
-    bar_vertical.grid(row=0, column=2, sticky='ns')
+        tree.grid(row=0, column=2 * index, sticky="nsew")
+        bar_vertical.grid(row=0, column=2 * index + 1, sticky='ns')
 
 
 def stop_loss_view(tab):

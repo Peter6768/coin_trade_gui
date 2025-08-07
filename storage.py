@@ -4,6 +4,7 @@ import pprint
 import datetime as dt
 
 import pandas as pd
+from tkinter import messagebox
 
 import utils
 import data
@@ -135,7 +136,7 @@ class DB:
             sub_df['rank'] = range(1, len(sub_df) + 1)
             sub_df['timestamp'] = sub_df['timestamp'].map(lambda x: dt.datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
             rst.append(sub_df)
-        return pd.concat(rst)
+        return rst
 
     def clean_wave_rate_old_data(self):
         newest_date = self.execute('select max(timestamp) from wave_rate;')[0][0]
@@ -176,6 +177,7 @@ class DB:
                     handle_output_format(coin_name, coin_sheet)
         if export_data_vars['币种止损数据']:
             pass
+        messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % os.path.realpath('.'))
 
     def update_wave_rate_date(self):
         newest_timestamp = self.get_newest_date()
