@@ -113,7 +113,7 @@ def buy_sell_panel(notebook):
 
 def wave_rate_panel(notebook):
     wave_rate_tab = ttk.Frame(notebook)
-    notebook.add(wave_rate_tab, text='年华波动率视图')
+    notebook.add(wave_rate_tab, text='年化波动率视图')
     notebook.pack(fill='both', expand=True)
     threading.Thread(target=wave_rate_view, daemon=True, args=(wave_rate_tab, )).start()
 

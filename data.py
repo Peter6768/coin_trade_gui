@@ -40,16 +40,25 @@ def get_kline_data(timespan=30, after=None):
     coin_kline_data = {}
 
     def get_coin_kline(coin_name_inner):
-        resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, after=after)
-        if int(resp['code']):
-            # logger.error('get coin %s kline data error: %s', coin_name_inner, resp['msg'])
-            logger.error('get coin %s kline data error: %s', coin_name_inner, resp['data'])
-        else:
-            coin_kline_data[coin_name_inner] = [i[:5] for i in resp['data']]
-        time.sleep(2.1)
+        count = 1
+        while count <= 3:
+            resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, after=after)
+            code = int(resp['code'])
+            if code == 50011:
+                logger.info('request for %s kline data frequency too fast, retry no.%s time', coin_name_inner, count)
+                count += 1
+                time.sleep(1.1)
+                continue
+            elif code:
+                logger.error('get coin %s kline data error: %s', coin_name_inner, resp['data'])
+                return
+            else:
+                coin_kline_data[coin_name_inner] = [i[:5] for i in resp['data']]
+                time.sleep(2.1)
+                return
 
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
             futures = [executor.submit(get_coin_kline, coin_name) for coin_name in coin_names]
             for _ in concurrent.futures.as_completed(futures):
                 pass
