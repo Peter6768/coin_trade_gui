@@ -19,7 +19,7 @@ class CollectDataThread:
 
     @staticmethod
     def collect_data_thread_start(*args, **kwargs):
-        utils.activate_widget(*args, kwargs)
+        utils.activate_widget(*args, **kwargs)
 
     @staticmethod
     def collect_data_thread_end(*args, **kwargs):
@@ -137,20 +137,18 @@ def data_collect_panel(notebook):
     export_date_selection.pack(side='left')
     ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars, export_date_selection)).pack(side='right', padx=(100, 0))
 
-
-
-    ontime_coin_type_frame = tk.Frame(data_collect_frame)
-    ontime_coin_type_frame.pack(anchor='w', fill='x')
-    ttk.Label(ontime_coin_type_frame, text='止损数据币种类型').pack(side='left')
-    ontime_coin_type_combo = ttk.Combobox(ontime_coin_type_frame, state='disabled')
-    ontime_coin_type_combo.set('加载中')
-    ontime_coin_type_combo.pack(side='left')
-    ontime_coin_type_set = ttk.Button(ontime_coin_type_frame, text='修改', command=lambda: utils.activate_widget(ontime_coin_type_apply, special={ontime_coin_type_combo: 'readonly'}))
-    ontime_coin_type_set.pack(side='right')
-    ontime_coin_type_apply = ttk.Button(ontime_coin_type_frame, text='应用', state='disabled',
-                                        command=lambda: utils.disable_widget(ontime_coin_type_combo, ontime_coin_type_apply))
-    ontime_coin_type_apply.pack(side='right')
-    threading.Thread(target=utils.load_ontime_coin_type_thread, args=(ontime_coin_type_combo, ), daemon=True).start()
+    # ontime_coin_type_frame = tk.Frame(data_collect_frame)
+    # ontime_coin_type_frame.pack(anchor='w', fill='x')
+    # ttk.Label(ontime_coin_type_frame, text='止损数据币种类型').pack(side='left')
+    # ontime_coin_type_combo = ttk.Combobox(ontime_coin_type_frame, state='disabled')
+    # ontime_coin_type_combo.set('加载中')
+    # ontime_coin_type_combo.pack(side='left')
+    # ontime_coin_type_set = ttk.Button(ontime_coin_type_frame, text='修改', command=lambda: utils.activate_widget(ontime_coin_type_apply, special={ontime_coin_type_combo: 'readonly'}))
+    # ontime_coin_type_set.pack(side='right')
+    # ontime_coin_type_apply = ttk.Button(ontime_coin_type_frame, text='应用', state='disabled',
+    #                                     command=lambda: utils.disable_widget(ontime_coin_type_combo, ontime_coin_type_apply))
+    # ontime_coin_type_apply.pack(side='right')
+    # threading.Thread(target=utils.load_ontime_coin_type_thread, args=(ontime_coin_type_combo, ), daemon=True).start()
 
     alarm_frame = ttk.LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')
