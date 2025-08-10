@@ -19,6 +19,16 @@ def data_collect_panel(notebook):
     notebook.add(tab, text='数据采集综合面板')
     notebook.pack(fill='both', expand=True)
 
+    # time
+    def update_time():
+        time_label.config(text='当前时间: ' + time.strftime('%Y-%m-%d %H:%M:%S'))
+        time_label.after(1000, update_time)
+    time_frame = tk.Frame(data_collect_frame)
+    time_frame.pack(anchor='w', fill='x')
+    time_label = ttk.Label(time_frame, text='当前时间')
+    time_label.pack(side='left')
+    update_time()
+
     # collect data
     collect_data_frame = tk.Frame(data_collect_frame)
     collect_data_frame.pack(anchor='w', fill='x')
@@ -89,12 +99,25 @@ def data_collect_panel(notebook):
     email_apply = ttk.Button(email_frame, text='应用', state='disabled', command=lambda: utils.disable_widget(email_entry, email_apply))
     email_apply.pack(side='right')
 
+    def dynamic_load_export_date(event):
+        export_date_selection['values'] = ['1', '2']
+        resp = storage.db_inst.execute_df('select distinct timestamp from wave_rate;')
+        timestamp_options = sorted(resp['timestamp'].unique())[-8:]
+        if dt.datetime.now().date() == dt.datetime.fromtimestamp(timestamp_options[-1]).date():
+            export_date_selection['values'] = [dt.datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[:-1]]
+        else:
+            export_date_selection['values'] = [dt.datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[-7:]]
     export_frame = tk.Frame(data_collect_frame)
     export_frame.pack(anchor='w', fill='x')
     ttk.Label(export_frame, text='导出数据excel').pack(side='left')
     for k, v in export_data_vars.items():
         ttk.Checkbutton(export_frame, variable=v, onvalue=True, offvalue=False, text=k).pack(side='left')
-    ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars)).pack(side='right')
+    ttk.Label(export_frame, text='年化波动率排名日期 ').pack(side='left')
+    export_date_selection = ttk.Combobox(export_frame, state='readonly')
+    # export_date_selection.set('加载中')
+    export_date_selection.bind("<Button-1>", dynamic_load_export_date)
+    export_date_selection.pack(side='left')
+    ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars, export_date_selection)).pack(side='right', padx=(100, 0))
 
     def load_ontime_coin_type_thread():
         try:

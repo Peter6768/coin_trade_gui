@@ -14,7 +14,7 @@ def get_logger():
     logger = logging.getLogger('trade')
     logger.setLevel(logging.INFO)
 
-    file_handler = logging.FileHandler(LOG_PATH)
+    file_handler = logging.FileHandler(LOG_PATH, encoding='utf-8')
     file_handler.setFormatter(log_format)
 
     logger.addHandler(file_handler)

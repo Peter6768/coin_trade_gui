@@ -28,7 +28,7 @@ def get_all_coin_name(coin_type='SWAP'):
         return coin_names
 
 
-def get_kline_data(timespan=30, after=None):
+def get_kline_data(timespan=90, before=None):
     """
     /api/v5/market/candles
     get recently {timespan} days coin kline data
@@ -41,8 +41,13 @@ def get_kline_data(timespan=30, after=None):
 
     def get_coin_kline(coin_name_inner):
         count = 1
-        while count <= 3:
-            resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, after=after)
+        while count <= 5:
+            try:
+                resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, before=before)
+            except Exception as e:
+                logger.error('get coin %s kline data error, retry num: %s: %s', coin_name_inner, count, e)
+                time.sleep(2)
+                continue
             code = int(resp['code'])
             if code == 50011:
                 logger.info('request for %s kline data frequency too fast, retry no.%s time', coin_name_inner, count)
