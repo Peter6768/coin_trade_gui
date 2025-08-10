@@ -1,6 +1,7 @@
 import threading
 import time
 import datetime as dt
+from functools import partial
 
 import tkinter as tk
 from tkinter import messagebox
@@ -10,6 +11,19 @@ import utils
 import storage
 
 logger = utils.get_logger()
+
+
+class CollectDataThread:
+    def __init__(self):
+        self.stop_event = threading.Event()
+
+    @staticmethod
+    def collect_data_thread_start(*args, **kwargs):
+        utils.activate_widget(*args, kwargs)
+
+    @staticmethod
+    def collect_data_thread_end(*args, **kwargs):
+        utils.disable_widget(*args)
 
 
 def data_collect_panel(notebook):
@@ -35,8 +49,12 @@ def data_collect_panel(notebook):
     ttk.Label(collect_data_frame, text='行情采集').pack(side='left')
     collect_data_radio1 = ttk.Radiobutton(collect_data_frame, text='采集', variable=collect_data_radio, value='yes', state='disabled')
     collect_data_radio2 = ttk.Radiobutton(collect_data_frame, text='停止采集', variable=collect_data_radio, value='no', state='disabled')
-    collect_data_set = ttk.Button(collect_data_frame, text='修改', command=lambda: utils.activate_widget(collect_data_radio1, collect_data_radio2, collect_data_apply))
-    collect_data_apply = ttk.Button(collect_data_frame, text='应用', state='disabled', command=lambda: utils.disable_widget(collect_data_radio1, collect_data_radio2, collect_data_apply))
+    collect_data_coin_name = ttk.Combobox(collect_data_frame, state='disabled')
+    collect_data_coin_name.set('请选择币种')
+    collect_data_coin_name.bind('<Button-1>', partial(utils.load_ontime_coin_type_thread, collect_data_coin_name))
+    collect_data_coin_name.pack(side='left')
+    collect_data_set = ttk.Button(collect_data_frame, text='修改', command=lambda: CollectDataThread.collect_data_thread_start(collect_data_radio1, collect_data_radio2, collect_data_apply, special={collect_data_coin_name: 'readonly'}))
+    collect_data_apply = ttk.Button(collect_data_frame, text='应用', state='disabled', command=lambda: CollectDataThread.collect_data_thread_end(collect_data_radio1, collect_data_radio2, collect_data_apply, collect_data_coin_name))
 
     collect_data_radio1.pack(side='left')
     collect_data_radio2.pack(side='left')
@@ -114,28 +132,12 @@ def data_collect_panel(notebook):
         ttk.Checkbutton(export_frame, variable=v, onvalue=True, offvalue=False, text=k).pack(side='left')
     ttk.Label(export_frame, text='年化波动率排名日期 ').pack(side='left')
     export_date_selection = ttk.Combobox(export_frame, state='readonly')
-    # export_date_selection.set('加载中')
+    export_date_selection.set('请选择日期')
     export_date_selection.bind("<Button-1>", dynamic_load_export_date)
     export_date_selection.pack(side='left')
     ttk.Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars, export_date_selection)).pack(side='right', padx=(100, 0))
 
-    def load_ontime_coin_type_thread():
-        try:
-            count = 1
-            while count <= 10:
-                coin_types = storage.db_inst.execute('select distinct coin_type from wave_rate;')
-                if len(coin_types) == 0:
-                    time.sleep(15)
-                    count += 1
-                    continue
-                else:
-                    coin_types = [item[0] for item in coin_types]
-                    coin_types.sort()
-                    ontime_coin_type_combo['values'] = coin_types
-                    ontime_coin_type_combo.set(coin_types[0])
-                    return
-        except Exception as e:
-            logger.exception('load ontime coin type error: %s', e)
+
 
     ontime_coin_type_frame = tk.Frame(data_collect_frame)
     ontime_coin_type_frame.pack(anchor='w', fill='x')
@@ -148,7 +150,7 @@ def data_collect_panel(notebook):
     ontime_coin_type_apply = ttk.Button(ontime_coin_type_frame, text='应用', state='disabled',
                                         command=lambda: utils.disable_widget(ontime_coin_type_combo, ontime_coin_type_apply))
     ontime_coin_type_apply.pack(side='right')
-    threading.Thread(target=load_ontime_coin_type_thread, daemon=True).start()
+    threading.Thread(target=utils.load_ontime_coin_type_thread, args=(ontime_coin_type_combo, ), daemon=True).start()
 
     alarm_frame = ttk.LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')

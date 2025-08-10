@@ -1,5 +1,7 @@
 import os
 import logging
+import time
+
 
 LOG_PATH = os.path.join(os.path.realpath('.'), 'trade.log')
 
@@ -33,3 +35,28 @@ def activate_widget(*args, **kwargs):
 def disable_widget(*args):
     for i in args:
         i['state'] = 'disabled'
+
+
+logger = get_logger()
+
+
+def load_ontime_coin_type_thread(widget, *args):
+    try:
+        count = 1
+        while count <= 10:
+            coin_types = storage.db_inst.execute('select distinct coin_type from wave_rate;')
+            if len(coin_types) == 0:
+                time.sleep(15)
+                count += 1
+                continue
+            else:
+                coin_types = [item[0] for item in coin_types]
+                coin_types.sort()
+                widget['values'] = coin_types
+                widget.set(coin_types[0])
+                return
+    except Exception as e:
+        logger.exception('load ontime coin type error: %s', e)
+
+
+import storage
