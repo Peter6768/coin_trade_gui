@@ -14,8 +14,8 @@ FLAG = '0'    # 0: real trade, 1: simulate trade
 def get_all_coin_name(coin_type='SWAP'):
     """/api/v5/public/instruments"""
     coin_names = []
+    publicdata_api = okx.PublicData.PublicAPI(flag=FLAG)
     try:
-        publicdata_api = okx.PublicData.PublicAPI(flag=FLAG)
         rst = publicdata_api.get_instruments(instType=coin_type)
         if not rst['code']:
             logger.error('get coin name error. return code is %s, error occur: %s', rst['code'], rst['msg'])
@@ -25,7 +25,21 @@ def get_all_coin_name(coin_type='SWAP'):
     except Exception as e:
         logger.exception('get all coin name via public data api error: %s', e)
     finally:
+        publicdata_api.close()
         return coin_names
+
+
+def get_one_coin_kline(coin_type):
+    marketdata_api = okx.MarketData.MarketAPI(flag=FLAG)
+    count = 1
+    while count <= 3:
+        try:
+            resp = marketdata_api.get_candlesticks(instId=coin_type)
+            return
+        except Exception as e:
+            logger.exception('get coin %s kline data error: %s', coin_type, e)
+            count += 1
+            continue
 
 
 def get_kline_data(timespan=90, before=None):
@@ -70,4 +84,5 @@ def get_kline_data(timespan=90, before=None):
     except Exception as e:
         logger.exception('get coin kline data error: %s', e)
     finally:
+        marketdata_api.close()
         return coin_kline_data

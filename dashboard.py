@@ -2,6 +2,7 @@ from threading import Thread, Event
 import time
 from datetime import datetime
 from functools import partial
+from configparser import ConfigParser
 
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
@@ -16,13 +17,22 @@ class CollectDataThread:
     def __init__(self):
         self.stop_event = Event()
 
-    @staticmethod
-    def collect_data_thread_start(*args, **kwargs):
+    def thread_start(self):
+        while True:
+            if not self.stop_event.is_set():
+                pass
+            time.sleep(60)
+
+    def collect_data_thread_edit(self, *args, **kwargs):
         utils.activate_widget(*args, **kwargs)
 
-    @staticmethod
-    def collect_data_thread_end(*args, **kwargs):
+    def collect_data_thread_apply(self, *args, **kwargs):
         utils.disable_widget(*args)
+        action = collect_data_radio.get()
+        if action == 'yes':
+            self.stop_event.clear()
+        elif action == 'no':
+            self.stop_event.set()
 
 
 def data_collect_panel(notebook):
@@ -52,8 +62,8 @@ def data_collect_panel(notebook):
     collect_data_coin_name.set('请选择币种')
     collect_data_coin_name.bind('<Button-1>', partial(utils.load_ontime_coin_type_thread, collect_data_coin_name))
     collect_data_coin_name.pack(side='left')
-    collect_data_set = Button(collect_data_frame, text='修改', command=lambda: CollectDataThread.collect_data_thread_start(collect_data_radio1, collect_data_radio2, collect_data_apply, special={collect_data_coin_name: 'readonly'}))
-    collect_data_apply = Button(collect_data_frame, text='应用', state='disabled', command=lambda: CollectDataThread.collect_data_thread_end(collect_data_radio1, collect_data_radio2, collect_data_apply, collect_data_coin_name))
+    collect_data_set = Button(collect_data_frame, text='修改', command=lambda: collect_data_thread.collect_data_thread_edit(collect_data_radio1, collect_data_radio2, collect_data_apply, special={collect_data_coin_name: 'readonly'}))
+    collect_data_apply = Button(collect_data_frame, text='应用', state='disabled', command=lambda: collect_data_thread.collect_data_thread_apply(collect_data_radio1, collect_data_radio2, collect_data_apply, collect_data_coin_name))
 
     collect_data_radio1.pack(side='left')
     collect_data_radio2.pack(side='left')
@@ -235,8 +245,17 @@ def update_wave_rate_task():
     Thread(target=update_wave_rate_data, daemon=True).start()
 
 
+def clean_old_wave_rate_task():
+    def clean_old_wave_rate_inner():
+        while True:
+            storage.db_inst.clean_wave_rate_old_data()
+            time.sleep(60)
+    Thread(target=clean_old_wave_rate_inner, daemon=True).start()
+
+
 def thread_tasks():
     update_wave_rate_task()
+    clean_old_wave_rate_task()
 
 
 def main():
@@ -268,4 +287,5 @@ if __name__ == '__main__':
         '固定止损报警': BooleanVar(value=True),
         '移动止损报警': BooleanVar(value=True),
     }
+    collect_data_thread = CollectDataThread()
     main()

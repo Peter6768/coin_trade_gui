@@ -50,7 +50,6 @@ class DB:
             logger.info('db file %s already exist, skip init db', db_path)
         self.create_table_wave_rate()
         self.create_table_ontime_kline()
-        # self.init_wave_data()
 
     @staticmethod
     def execute(cmd):
@@ -173,6 +172,8 @@ class DB:
             return
         newest_date = resp[0][0]
         date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
+        if self.execute('select count(*) from wave_rate where timestamp<%s' % date_clean)[0][0] == 0:
+            return
         self.execute('delete from wave_rate where timestamp < %s' % date_clean)
         logger.info('success clean wave rate data before date %s', datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
 
