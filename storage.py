@@ -1,11 +1,10 @@
-import os
-import sqlite3
-import pprint
+from os import path, remove
+from sqlite3 import connect
 import time
-import datetime as dt
+from datetime import datetime
 from collections import deque
 
-import pandas as pd
+from pandas import read_sql, ExcelWriter
 from tkinter import messagebox
 
 import utils
@@ -39,10 +38,10 @@ class DB:
             'wave_rate_year': '年化波动率'
         }
 
-        if not os.path.exists(db_path):
+        if not path.exists(db_path):
             logger.info('db file %s not exist, try to create.', db_path)
             try:
-                conn = sqlite3.connect(db_path)
+                conn = connect(db_path)
             except Exception as e:
                 logger.exception('init db occur error: %s', e)
             else:
@@ -55,7 +54,7 @@ class DB:
 
     @staticmethod
     def execute(cmd):
-        conn = sqlite3.connect(db_path)
+        conn = connect(db_path)
         cursor = conn.cursor()
         cursor.execute(cmd)
         conn.commit()
@@ -66,8 +65,8 @@ class DB:
 
     @staticmethod
     def execute_df(cmd):
-        conn = sqlite3.connect(db_path)
-        rst = pd.read_sql(cmd, conn)
+        conn = connect(db_path)
+        rst = read_sql(cmd, conn)
         conn.close()
         return rst
 
@@ -108,10 +107,9 @@ class DB:
         '''
         self.execute(cmd)
 
-    def insert_wave_rate_batch(self, data):
+    def insert_wave_rate_batch(self, d):
         cmd = ('insert into wave_rate (timestamp,begin_price,max_price,min_price,last_price,coin_type,daily_wave,avg_wave,wave_sum,daily_wave_rate,wave_rate_year) values ' +
-                   ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s)' % tuple(v)) for _, values in data.items() for v in values]) +
-                   ';')
+               ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s)' % tuple(v)) for _, values in d.items() for v in values]) + ';')
         self.execute(cmd)
 
     def init_wave_data(self):
@@ -165,7 +163,7 @@ class DB:
             sub_df = df[df['timestamp'] == timestamp].copy()
             sub_df.sort_values(by='wave_rate_year', ascending=False, inplace=True)
             sub_df['rank'] = range(1, len(sub_df) + 1)
-            sub_df['timestamp'] = sub_df['timestamp'].map(lambda x: dt.datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
+            sub_df['timestamp'] = sub_df['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
             rst.append(sub_df)
         return rst
 
@@ -176,7 +174,7 @@ class DB:
         newest_date = resp[0][0]
         date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
         self.execute('delete from wave_rate where timestamp < %s' % date_clean)
-        logger.info('success clean wave rate data before date %s', dt.datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
+        logger.info('success clean wave rate data before date %s', datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
 
     def export_data(self, export_data_vars, wave_date_combobox):
         if self.state == 'initializing':
@@ -191,18 +189,18 @@ class DB:
                 return
             self.clean_wave_rate_old_data()
             df = self.execute_df('select * from wave_rate;')
-            target_date = dt.datetime.strptime(wave_rate_date, '%Y-%m-%d')
+            target_date = datetime.strptime(wave_rate_date, '%Y-%m-%d')
             target_timestamp = target_date.timestamp()
             # max_date = df['timestamp'].max()
             table_name = '年华波动率数据%s.xlsx' % wave_rate_date
-            if os.path.exists(table_name):
+            if path.exists(table_name):
                 logger.info('table %s already exist, try to delete and create a new one', table_name)
                 try:
-                    os.remove(table_name)
-                except PermissionError as e:
+                    remove(table_name)
+                except PermissionError:
                     logger.error('export data error, file is open, please close file and retry export data')
                     messagebox.showinfo('提示', '文件已打开, 无法导出文件, 请关闭文件后重新导出')
-            with pd.ExcelWriter(table_name, engine='xlsxwriter') as writer:
+            with ExcelWriter(table_name, engine='xlsxwriter') as writer:
                 def handle_output_format(sheet_name, df_inner):
                     worksheet = writer.sheets[sheet_name]
                     for col_num, value in enumerate(df_inner.columns.values):
@@ -220,16 +218,16 @@ class DB:
                 for coin_name in sorted(df['coin_type'].unique()):
                     coin_sheet = df[df['coin_type'] == coin_name].copy()
                     coin_sheet.sort_values(by='timestamp', ascending=True, inplace=True)
-                    coin_sheet['timestamp'] = coin_sheet['timestamp'].map(lambda x: dt.datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
+                    coin_sheet['timestamp'] = coin_sheet['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d'))
                     coin_sheet.rename(columns={**self.wave_rate_col_name_map, 'rank': '排名'}, inplace=True)
                     coin_sheet.to_excel(writer, sheet_name=coin_name, index=False)
                     handle_output_format(coin_name, coin_sheet)
         if export_data_vars['币种止损数据']:
             pass
-        messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % os.path.realpath('.'))
+        messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % path.realpath('.'))
 
     def delete_dirty_wave_rate_data(self, timestamp):
-        logger.info('delete wave_rate data of date %s', dt.datetime.fromtimestamp(timestamp).isoformat())
+        logger.info('delete wave_rate data of date %s', datetime.fromtimestamp(timestamp).isoformat())
         self.execute('delete from wave_rate where timestamp>=%s' % timestamp)
 
     def update_wave_rate_data(self):
@@ -243,7 +241,7 @@ class DB:
             elif self.state == 'ok':
                 break
         start_timestamp = self.get_newest_date()
-        timestamp_delta = dt.datetime.now().timestamp() - start_timestamp
+        timestamp_delta = datetime.now().timestamp() - start_timestamp
         if timestamp_delta >= 24 * 3600 * self.data_clean_timespan:
             self.clean_wave_rate_old_data()
             self.init_wave_data()

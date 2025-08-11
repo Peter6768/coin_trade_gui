@@ -1,4 +1,4 @@
-import concurrent
+from concurrent import futures
 import time
 
 import okx.PublicData
@@ -63,9 +63,9 @@ def get_kline_data(timespan=90, before=None):
                 return
 
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
-            futures = [executor.submit(get_coin_kline, coin_name) for coin_name in coin_names]
-            for _ in concurrent.futures.as_completed(futures):
+        with futures.ThreadPoolExecutor(max_workers=15) as executor:
+            tasks = [executor.submit(get_coin_kline, coin_name) for coin_name in coin_names]
+            for _ in futures.as_completed(tasks):
                 pass
     except Exception as e:
         logger.exception('get coin kline data error: %s', e)
