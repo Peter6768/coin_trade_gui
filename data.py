@@ -29,17 +29,27 @@ def get_all_coin_name(coin_type='SWAP'):
         return coin_names
 
 
-def get_one_coin_kline(coin_type):
+def get_one_coin_kline(coin_type, begin_timestamp, end_timestamp):
     marketdata_api = okx.MarketData.MarketAPI(flag=FLAG)
     count = 1
     while count <= 3:
         try:
-            resp = marketdata_api.get_candlesticks(instId=coin_type)
-            return
+            resp = marketdata_api.get_candlesticks(instId=coin_type, before=begin_timestamp, after=end_timestamp, limit=1)
         except Exception as e:
             logger.exception('get coin %s kline data error: %s', coin_type, e)
             count += 1
             continue
+        code = int(resp['code'])
+        if code == 50011:
+            logger.error('request kline data for coin %s is too fast, sleep and retry', coin_type)
+            time.sleep(20)
+            continue
+        elif code:
+            logger.error('response code error: %s, msg: %s', resp['code'], resp.get('msg', ''))
+            return
+        else:
+            marketdata_api.close()
+            return resp['data']
 
 
 def get_kline_data(timespan=90, before=None):

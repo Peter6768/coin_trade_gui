@@ -242,7 +242,7 @@ class DB:
             elif self.state == 'ok':
                 break
         start_timestamp = self.get_newest_date()
-        timestamp_delta = datetime.now().timestamp() - start_timestamp
+        timestamp_delta = time.time() - start_timestamp
         if timestamp_delta >= 24 * 3600 * self.data_clean_timespan:
             self.clean_wave_rate_old_data()
             self.init_wave_data()

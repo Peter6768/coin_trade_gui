@@ -1,4 +1,4 @@
-from threading import Thread, Event
+from threading import Thread, Event, Lock
 import time
 from datetime import datetime
 from functools import partial
@@ -7,6 +7,7 @@ from configparser import ConfigParser
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
 
+import data
 import utils
 import storage
 
@@ -16,23 +17,60 @@ logger = utils.get_logger()
 class CollectDataThread:
     def __init__(self):
         self.stop_event = Event()
+        self.coin_type = ''
+        self.thread_start()
+        self.mutex = Lock()
+
+    @staticmethod
+    def get_timestamp():
+        now_timestamp = time.time()
+        end_timestamp = int(now_timestamp - (now_timestamp % 300))
+        begin_timestamp = end_timestamp - 300
+        return begin_timestamp, end_timestamp
+
+    def get_data(self):
+        begin_timestamp, end_timestamp = self.get_timestamp()
+        row_num = storage.db_inst.execute('select count(*) from wave_rate where timestamp>=%s and timestamp<%s' % (begin_timestamp, end_timestamp))[0][0]
+        if row_num == 0:
+            return data.get_one_coin_kline(self.coin_type)
+        elif row_num > 0:
+            return [[]]
+
+    def get_peak_values(self):
+        today_timestamp = time.time() - (time.time() % (24 * 3600))
+        records = storage.db_inst.execute('select ')
+        return '', ''
 
     def thread_start(self):
         while True:
             if not self.stop_event.is_set():
-                pass
-            time.sleep(60)
+                with self.mutex:
+                    d = self.get_data()
+                    if d:
+                        today_min, today_max = self.get_peak_values()
+                        pass
+                time.sleep(60)
+
 
     def collect_data_thread_edit(self, *args, **kwargs):
         utils.activate_widget(*args, **kwargs)
 
     def collect_data_thread_apply(self, *args, **kwargs):
+        coin_type_widget = kwargs.get('coin_type', None)
+        if coin_type_widget:
+            v = coin_type_widget.get()
+            if v == '请选择币种':
+                pass
+            else:
+                self.coin_type = v
+                action = collect_data_radio.get()
+                if action == 'yes':
+                    self.stop_event.clear()
+                elif action == 'no':
+                    self.stop_event.set()
+            utils.disable_widget(kwargs.get('coin_type'))
+
         utils.disable_widget(*args)
-        action = collect_data_radio.get()
-        if action == 'yes':
-            self.stop_event.clear()
-        elif action == 'no':
-            self.stop_event.set()
 
 
 def data_collect_panel(notebook):
@@ -63,7 +101,7 @@ def data_collect_panel(notebook):
     collect_data_coin_name.bind('<Button-1>', partial(utils.load_ontime_coin_type_thread, collect_data_coin_name))
     collect_data_coin_name.pack(side='left')
     collect_data_set = Button(collect_data_frame, text='修改', command=lambda: collect_data_thread.collect_data_thread_edit(collect_data_radio1, collect_data_radio2, collect_data_apply, special={collect_data_coin_name: 'readonly'}))
-    collect_data_apply = Button(collect_data_frame, text='应用', state='disabled', command=lambda: collect_data_thread.collect_data_thread_apply(collect_data_radio1, collect_data_radio2, collect_data_apply, collect_data_coin_name))
+    collect_data_apply = Button(collect_data_frame, text='应用', state='disabled', command=lambda: collect_data_thread.collect_data_thread_apply(collect_data_radio1, collect_data_radio2, collect_data_apply, coin_type=collect_data_coin_name))
 
     collect_data_radio1.pack(side='left')
     collect_data_radio2.pack(side='left')
