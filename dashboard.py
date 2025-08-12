@@ -18,8 +18,9 @@ class CollectDataThread:
     def __init__(self):
         self.stop_event = Event()
         self.coin_type = ''
-        self.thread_start()
         self.mutex = Lock()
+        self.thread_start()
+
 
     @staticmethod
     def get_timestamp():
@@ -32,7 +33,7 @@ class CollectDataThread:
         begin_timestamp, end_timestamp = self.get_timestamp()
         row_num = storage.db_inst.execute('select count(*) from wave_rate where timestamp>=%s and timestamp<%s' % (begin_timestamp, end_timestamp))[0][0]
         if row_num == 0:
-            return data.get_one_coin_kline(self.coin_type)
+            return data.get_one_coin_kline(self.coin_type, begin_timestamp, end_timestamp)
         elif row_num > 0:
             return [[]]
 
@@ -42,15 +43,17 @@ class CollectDataThread:
         return '', ''
 
     def thread_start(self):
-        while True:
-            if not self.stop_event.is_set():
-                with self.mutex:
-                    d = self.get_data()
-                    if d:
-                        today_min, today_max = self.get_peak_values()
-                        pass
+        def thread_inner():
+            while True:
+                if not self.stop_event.is_set():
+                    if self.coin_type and self.coin_type != '请选择币种':
+                        with self.mutex:
+                            d = self.get_data()
+                            if d:
+                                today_min, today_max = self.get_peak_values()
+                                pass
                 time.sleep(60)
-
+        Thread(target=thread_inner, daemon=True).start()
 
     def collect_data_thread_edit(self, *args, **kwargs):
         utils.activate_widget(*args, **kwargs)
