@@ -3,6 +3,7 @@ from sqlite3 import connect
 import time
 from datetime import datetime
 from collections import deque
+from threading import Lock
 
 from pandas import read_sql, ExcelWriter
 from tkinter import messagebox
@@ -22,6 +23,7 @@ class DB:
     def __init__(self):
         self.data_clean_timespan = 90
         self.state = 'ok'
+        self.mutex = Lock()
         self.wave_rate_col_name_map = {
             'timestamp': '日期',
             'coin_type': '币种名称',
@@ -51,15 +53,15 @@ class DB:
         self.create_table_wave_rate()
         self.create_table_ontime_kline()
 
-    @staticmethod
-    def execute(cmd):
-        conn = connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(cmd)
-        conn.commit()
-        rst = cursor.fetchall()
-        cursor.close()
-        conn.close()
+    def execute(self, cmd):
+        with self.mutex:
+            conn = connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute(cmd)
+            conn.commit()
+            rst = cursor.fetchall()
+            cursor.close()
+            conn.close()
         return rst
 
     @staticmethod
@@ -117,7 +119,9 @@ class DB:
             row_num = self.execute('select count(*) from wave_rate;')[0][0]
             if row_num == 0:
                 logger.info('table wave_rate is empty, try to initialize')
-                kline_data = data.get_kline_data()
+                now = time.time()
+                after_timestamp = int((now - now % 86400 - 8 * 3600) * 1000)
+                kline_data = data.get_kline_data(after=after_timestamp)
                 self.handle_kline_data(kline_data)
                 self.insert_wave_rate_batch(kline_data)
             else:
@@ -156,7 +160,7 @@ class DB:
     def get_recent_wave_data(self, dayspan=3):
         end_date = self.get_newest_date()
         start_date = end_date - 24 * 3600 * dayspan
-        df = self.execute_df('select timestamp, coin_type, wave_rate_year from wave_rate where timestamp >= %s and timestamp < %s' % (start_date, end_date))
+        df = self.execute_df('select timestamp, coin_type, wave_rate_year from wave_rate where timestamp > %s and timestamp <= %s' % (start_date, end_date))
         rst = []
         for timestamp in sorted([i.item() for i in df['timestamp'].unique()], reverse=True):
             sub_df = df[df['timestamp'] == timestamp].copy()
@@ -167,15 +171,19 @@ class DB:
         return rst
 
     def clean_wave_rate_old_data(self):
-        resp = self.execute('select max(timestamp) from wave_rate;')
-        if len(resp) == 0 or len(resp[0]) == 0:
+        if self.state == 'initializing':
+            logger.info('data is initializing, return')
             return
-        newest_date = resp[0][0]
-        date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
-        if self.execute('select count(*) from wave_rate where timestamp<%s' % date_clean)[0][0] == 0:
-            return
-        self.execute('delete from wave_rate where timestamp < %s' % date_clean)
-        logger.info('success clean wave rate data before date %s', datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
+        else:
+            resp = self.execute('select max(timestamp) from wave_rate;')
+            if len(resp) == 0 or len(resp[0]) == 0 or (not resp[0][0]):
+                return
+            newest_date = resp[0][0]
+            date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
+            if self.execute('select count(*) from wave_rate where timestamp<%s' % date_clean)[0][0] == 0:
+                return
+            self.execute('delete from wave_rate where timestamp < %s' % date_clean)
+            logger.info('success clean wave rate data before date %s', datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
 
     def export_data(self, export_data_vars, wave_date_combobox):
         if self.state == 'initializing':
@@ -227,13 +235,9 @@ class DB:
             pass
         messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % path.realpath('.'))
 
-    def delete_dirty_wave_rate_data(self, timestamp):
-        logger.info('delete wave_rate data of date %s', datetime.fromtimestamp(timestamp).isoformat())
-        self.execute('delete from wave_rate where timestamp>=%s' % timestamp)
-
     def update_wave_rate_data(self):
         logger.info('begin to periodically update wave rate data')
-        count, sleep_time = 1, 20
+        count, sleep_time = 1, 30
         while count <= 5:
             if self.state == 'initialing':
                 logger.info('storage is initializing, sleep %s and continue, retry time: %s', sleep_time, count)
@@ -243,12 +247,10 @@ class DB:
                 break
         start_timestamp = self.get_newest_date()
         timestamp_delta = time.time() - start_timestamp
-        if timestamp_delta >= 24 * 3600 * self.data_clean_timespan:
-            self.clean_wave_rate_old_data()
+        if timestamp_delta > 24 * 3600 * self.data_clean_timespan:
             self.init_wave_data()
-        else:
-            self.delete_dirty_wave_rate_data(start_timestamp)
-            newest_data = data.get_kline_data(before=start_timestamp * 1000 - 1)
+        elif timestamp_delta > 24 * 3600 * 2:
+            newest_data = data.get_kline_data(before=start_timestamp * 1000, after=(int(time.time()) - 86400) * 1000)
             old_data = self.execute_df('select * from wave_rate;')
             old_coin_names = old_data['coin_type'].unique()
             for coin_type in newest_data:
@@ -276,7 +278,7 @@ class DB:
                             v.extend([avg_wave, wave_sum, daily_wave_rate, wave_rate_year])
                             wave_sum_window.append(daily_wave)
             self.insert_wave_rate_batch(newest_data)
-            self.clean_wave_rate_old_data()
+        self.clean_wave_rate_old_data()
         logger.info('update start timestamp is %s', start_timestamp)
 
 

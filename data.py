@@ -52,7 +52,7 @@ def get_one_coin_kline(coin_type, begin_timestamp, end_timestamp):
             return resp['data']
 
 
-def get_kline_data(timespan=90, before=None):
+def get_kline_data(timespan=90, before=None, after=None):
     """
     /api/v5/market/candles
     get recently {timespan} days coin kline data
@@ -67,7 +67,7 @@ def get_kline_data(timespan=90, before=None):
         count = 1
         while count <= 5:
             try:
-                resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, before=before)
+                resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, before=before, after=after)
             except Exception as e:
                 logger.error('get coin %s kline data error, retry num: %s: %s', coin_name_inner, count, e)
                 time.sleep(2)

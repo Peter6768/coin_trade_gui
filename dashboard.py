@@ -168,13 +168,15 @@ def data_collect_panel(notebook):
     email_apply.pack(side='right')
 
     def dynamic_load_export_date(event):
-        export_date_selection['values'] = ['1', '2']
+        # export_date_selection['values'] = ['1', '2']
         resp = storage.db_inst.execute_df('select distinct timestamp from wave_rate;')
-        timestamp_options = sorted(resp['timestamp'].unique())[-8:]
-        if datetime.now().date() == datetime.fromtimestamp(timestamp_options[-1]).date():
-            export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[:-1]]
-        else:
-            export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[-7:]]
+        # timestamp_options = sorted(resp['timestamp'].unique())[-8:]
+        timestamp_options = sorted(resp['timestamp'].unique())[-7:]
+        export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options]
+        # if datetime.now().date() == datetime.fromtimestamp(timestamp_options[-1]).date():
+        #     export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[:-1]]
+        # else:
+        #     export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[-7:]]
     export_frame = Frame_tk(data_collect_frame)
     export_frame.pack(anchor='w', fill='x')
     Label(export_frame, text='导出数据excel').pack(side='left')
