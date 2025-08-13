@@ -182,8 +182,8 @@ class DB:
             date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
             if self.execute('select count(*) from wave_rate where timestamp<%s' % date_clean)[0][0] == 0:
                 return
+            logger.info('begin to clean old data before timestamp %s', date_clean)
             self.execute('delete from wave_rate where timestamp < %s' % date_clean)
-            logger.info('success clean wave rate data before date %s', datetime.fromtimestamp(date_clean).strftime('%Y-%m-%d'))
 
     def export_data(self, export_data_vars, wave_date_combobox):
         if self.state == 'initializing':
@@ -236,7 +236,6 @@ class DB:
         messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % path.realpath('.'))
 
     def update_wave_rate_data(self):
-        logger.info('begin to periodically update wave rate data')
         count, sleep_time = 1, 30
         while count <= 5:
             if self.state == 'initialing':
@@ -248,8 +247,10 @@ class DB:
         start_timestamp = self.get_newest_date()
         timestamp_delta = time.time() - start_timestamp
         if timestamp_delta > 24 * 3600 * self.data_clean_timespan:
+            logger.info('newest timestamp older than 90 days, try to init wave data')
             self.init_wave_data()
         elif timestamp_delta > 24 * 3600 * 2:
+            logger.info('begin to periodically update wave rate data')
             newest_data = data.get_kline_data(before=start_timestamp * 1000, after=(int(time.time()) - 86400) * 1000)
             old_data = self.execute_df('select * from wave_rate;')
             old_coin_names = old_data['coin_type'].unique()
@@ -278,8 +279,9 @@ class DB:
                             v.extend([avg_wave, wave_sum, daily_wave_rate, wave_rate_year])
                             wave_sum_window.append(daily_wave)
             self.insert_wave_rate_batch(newest_data)
+        else:
+            logger.info('no trigger wave data update')
         self.clean_wave_rate_old_data()
-        logger.info('update start timestamp is %s', start_timestamp)
 
 
 db_inst = DB()

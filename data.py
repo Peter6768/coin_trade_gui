@@ -1,8 +1,11 @@
 from concurrent import futures
 import time
+from httpcore import ConnectError as httpcore_ConnectError
+from httpx import ConnectError as httpx_ConnectError
 
 import okx.PublicData
 import okx.MarketData
+from tkinter.messagebox import showinfo
 
 import utils
 
@@ -22,6 +25,10 @@ def get_all_coin_name(coin_type='SWAP'):
             raise Exception('get coin name error')
         coin_names = [i for i in {j['instId'] for j in rst['data'] if ('usdt' in j['instId'].lower() and j['instType'] == 'SWAP' and ('test' not in j['instId'].lower()))}]
         coin_names.sort()
+    except httpx_ConnectError as e:
+        logger.exception('please open vpn and restart this program: %s', e)
+        showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
+        exit(1)
     except Exception as e:
         logger.exception('get all coin name via public data api error: %s', e)
     finally:
@@ -35,6 +42,10 @@ def get_one_coin_kline(coin_type, begin_timestamp, end_timestamp):
     while count <= 3:
         try:
             resp = marketdata_api.get_candlesticks(instId=coin_type, before=begin_timestamp, after=end_timestamp, limit=1)
+        except httpx_ConnectError as e:
+            logger.exception('please open vpn and restart this program: %s', e)
+            showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
+            exit(1)
         except Exception as e:
             logger.exception('get coin %s kline data error: %s', coin_type, e)
             count += 1
@@ -68,6 +79,10 @@ def get_kline_data(timespan=90, before=None, after=None):
         while count <= 5:
             try:
                 resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, before=before, after=after)
+            except httpx_ConnectError as e:
+                logger.exception('please open vpn and restart this program: %s', e)
+                showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
+                exit(1)
             except Exception as e:
                 logger.error('get coin %s kline data error, retry num: %s: %s', coin_name_inner, count, e)
                 time.sleep(2)
