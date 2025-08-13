@@ -104,6 +104,7 @@ class DB:
         dot_neg_num integer,
         dot_pos_num integer,
         dot_final integer,
+        dot_key_value integer,
         dot_op_type text);
         '''
         self.execute(cmd)

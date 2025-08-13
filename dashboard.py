@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 from functools import partial
 from configparser import ConfigParser
+from collections import deque
 
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
@@ -19,8 +20,8 @@ class CollectDataThread:
         self.stop_event = Event()
         self.coin_type = ''
         self.mutex = Lock()
+        self.ontime_data_window = deque(maxlen=2)
         self.thread_start()
-
 
     @staticmethod
     def get_timestamp():
@@ -168,15 +169,9 @@ def data_collect_panel(notebook):
     email_apply.pack(side='right')
 
     def dynamic_load_export_date(event):
-        # export_date_selection['values'] = ['1', '2']
         resp = storage.db_inst.execute_df('select distinct timestamp from wave_rate;')
-        # timestamp_options = sorted(resp['timestamp'].unique())[-8:]
         timestamp_options = sorted(resp['timestamp'].unique())[-7:]
         export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options]
-        # if datetime.now().date() == datetime.fromtimestamp(timestamp_options[-1]).date():
-        #     export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[:-1]]
-        # else:
-        #     export_date_selection['values'] = [datetime.fromtimestamp(i).strftime('%Y-%m-%d') for i in timestamp_options[-7:]]
     export_frame = Frame_tk(data_collect_frame)
     export_frame.pack(anchor='w', fill='x')
     Label(export_frame, text='导出数据excel').pack(side='left')
@@ -188,19 +183,6 @@ def data_collect_panel(notebook):
     export_date_selection.bind("<Button-1>", dynamic_load_export_date)
     export_date_selection.pack(side='left')
     Button(export_frame, text='导出', command=lambda: storage.db_inst.export_data(export_data_vars, export_date_selection)).pack(side='right', padx=(100, 0))
-
-    # ontime_coin_type_frame = Frame(data_collect_frame)
-    # ontime_coin_type_frame.pack(anchor='w', fill='x')
-    # ttk.Label(ontime_coin_type_frame, text='止损数据币种类型').pack(side='left')
-    # ontime_coin_type_combo = ttk.Combobox(ontime_coin_type_frame, state='disabled')
-    # ontime_coin_type_combo.set('加载中')
-    # ontime_coin_type_combo.pack(side='left')
-    # ontime_coin_type_set = ttk.Button(ontime_coin_type_frame, text='修改', command=lambda: utils.activate_widget(ontime_coin_type_apply, special={ontime_coin_type_combo: 'readonly'}))
-    # ontime_coin_type_set.pack(side='right')
-    # ontime_coin_type_apply = ttk.Button(ontime_coin_type_frame, text='应用', state='disabled',
-    #                                     command=lambda: utils.disable_widget(ontime_coin_type_combo, ontime_coin_type_apply))
-    # ontime_coin_type_apply.pack(side='right')
-    # Thread(target=utils.load_ontime_coin_type_thread, args=(ontime_coin_type_combo, ), daemon=True).start()
 
     alarm_frame = LabelFrame(tab, text='报警面板', padding=[10 for _ in range(4)])
     alarm_frame.pack(side='left')
