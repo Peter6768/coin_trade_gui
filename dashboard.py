@@ -36,7 +36,7 @@ class CollectDataThread:
         if row_num == 0:
             return data.get_one_coin_kline(self.coin_type, begin_timestamp, end_timestamp)
         elif row_num > 0:
-            return [[]]
+            return []
 
     def get_peak_values(self):
         today_timestamp = time.time() - (time.time() % (24 * 3600))
@@ -45,14 +45,41 @@ class CollectDataThread:
 
     def thread_start(self):
         def thread_inner():
+            # fill today data:
             while True:
                 if not self.stop_event.is_set():
                     if self.coin_type and self.coin_type != '请选择币种':
-                        with self.mutex:
-                            d = self.get_data()
-                            if d:
-                                today_min, today_max = self.get_peak_values()
-                                pass
+                        # fill today previous data
+                        now = time.time()
+                        day_begin_timestamp = now - (now + 8 * 3600) % 86400
+                        end_timestamp = now - now % 300
+                        begin_timestamp = end_timestamp - 300
+                        resp = storage.db_inst.execute('select count(*) from ontime_kline where timetsamp>=%s and timestamp<=%s and coin_type=="%s";' % (day_begin_timestamp, begin_timestamp, self.coin_type))
+                        if not resp[0][0]:
+                            logger.info('today data of coin %s is empty, auto fill data')
+                            coin_data = data.get_one_coin_kline(self.coin_type, day_begin_timestamp, begin_timestamp)
+                            if not coin_data:
+                                logger.error('get coin data is None! return')
+                                return
+                            coin_data.sort(key=lambda x: int(x[0]))
+                            today_max, today_min = 0, 0
+                            for index in range(len(coin_data)):
+                                coin_data[index] = coin_data[index][:5]
+                                v = coin_data[index]
+                                coin_data[0] = int(v[0][:-3])
+                                coin_data.append(self.coin_type)
+                                today_max = max(today_max, v[2])
+                                today_min = min(today_min, v[3])
+                                coin_data.extend([today_max, today_min])
+
+            while True:
+                if not self.stop_event.is_set():
+                    if self.coin_type and self.coin_type != '请选择币种':
+
+                        d = self.get_data()
+                        if d:
+                            today_min, today_max = self.get_peak_values()
+                            pass
                 time.sleep(60)
         Thread(target=thread_inner, daemon=True).start()
 
