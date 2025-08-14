@@ -7,6 +7,7 @@ from collections import deque
 
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
+from tkinter.messagebox import showinfo
 
 import data
 import utils
@@ -38,9 +39,11 @@ class CollectDataThread:
         elif row_num > 0:
             return []
 
-    def get_peak_values(self):
-        today_timestamp = time.time() - (time.time() % (24 * 3600))
-        records = storage.db_inst.execute('select ')
+    def get_peak_values(self, day_begin_timestamp, begin_timestamp, end_timestamp):
+        today_records = storage.db_inst.execute_df('select today_max, today_min from ontime_kline where timestamp>=%s and timestamp<=%s', day_begin_timestamp, begin_timestamp)
+        if len(today_records) > 0:
+            return today_records.sort_values(by='timestamp', ascending=True).iloc[-1][['today_max', 'today_min']]
+
         return '', ''
 
     def thread_start(self):
@@ -49,37 +52,64 @@ class CollectDataThread:
             while True:
                 if not self.stop_event.is_set():
                     if self.coin_type and self.coin_type != '请选择币种':
-                        # fill today previous data
                         now = time.time()
                         day_begin_timestamp = now - (now + 8 * 3600) % 86400
                         end_timestamp = now - now % 300
                         begin_timestamp = end_timestamp - 300
-                        resp = storage.db_inst.execute('select count(*) from ontime_kline where timetsamp>=%s and timestamp<=%s and coin_type=="%s";' % (day_begin_timestamp, begin_timestamp, self.coin_type))
-                        if not resp[0][0]:
-                            logger.info('today data of coin %s is empty, auto fill data')
-                            coin_data = data.get_one_coin_kline(self.coin_type, day_begin_timestamp, begin_timestamp)
-                            if not coin_data:
-                                logger.error('get coin data is None! return')
-                                return
-                            coin_data.sort(key=lambda x: int(x[0]))
-                            today_max, today_min = 0, 0
-                            for index in range(len(coin_data)):
-                                coin_data[index] = coin_data[index][:5]
-                                v = coin_data[index]
-                                coin_data[0] = int(v[0][:-3])
-                                coin_data.append(self.coin_type)
-                                today_max = max(today_max, v[2])
-                                today_min = min(today_min, v[3])
-                                coin_data.extend([today_max, today_min])
+                        resp = storage.db_inst.execute('select max(timestamp) from ontime_kline where coin_type=="%s";' % self.coin_type)
+                        if resp[0][0] == begin_timestamp:
+                            logger.info('ontime_kline data is newest, no need to fill')
+                            break
+                        update_begin_timestamp = max(resp[0][0] or 0, day_begin_timestamp - 1)
+                        resp = storage.db_inst.execute('select today_max, today_min from ontime_kline where timestamp==%s and coin_type=="%s"' % (update_begin_timestamp, self.coin_type))
+                        today_max, today_min = (0, 0) if not resp else resp[0]
+                        logger.info('auto fill ontime_kline data from date %s to %s', update_begin_timestamp, begin_timestamp)
+
+                        coin_data = data.get_one_coin_kline(self.coin_type, int(update_begin_timestamp) * 1000, int(begin_timestamp) * 1000 + 1)
+                        if not coin_data:
+                            logger.error('get coin data is None! return')
+                            showinfo('提示', '无法回补币种%s5分钟k线数据, 请检查vpn是否开启, 并重启程序' % self.coin_type)
+                            return
+
+                        coin_data.sort(key=lambda x: int(x[0]))
+                        for index in range(len(coin_data)):
+                            coin_data[index] = coin_data[index][:5]
+                            v = coin_data[index]
+                            v[0] = int(v[0][:-3])
+                            v.append(self.coin_type)
+                            today_max = max(today_max, round(float(v[2]), ndigits=8))
+                            today_min = min(today_min, round(float(v[3]), ndigits=8))
+                            v.extend([today_max, today_min])
+                            v.extend(['null'] * 5)
+                        cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, last_price, '
+                               'coin_type, today_max, today_min, dot_neg_num, dot_pos_num, dot_final, dot_key_value, '
+                               'dot_op_type) values ') + ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(i)) for i in coin_data])
+                        storage.db_inst.execute(cmd)
+                        break
+                time.sleep(30)
 
             while True:
                 if not self.stop_event.is_set():
                     if self.coin_type and self.coin_type != '请选择币种':
-
-                        d = self.get_data()
-                        if d:
-                            today_min, today_max = self.get_peak_values()
-                            pass
+                        coin_data = []
+                        now = time.time()
+                        end_timestamp = int(now - now % 300)
+                        begin_timestamp = int(end_timestamp - 300)
+                        newest_timestamp = storage.db_inst.execute('select max(timestamp) from ontime_kline where coin_type=="%s";' % self.coin_type)[0][0]
+                        logger.info('tjhtest newest: %s, begin: %s', newest_timestamp, begin_timestamp)
+                        if newest_timestamp == begin_timestamp:
+                            logger.info('ontime_kline data is newest, no need to update')
+                        elif newest_timestamp + 300 == begin_timestamp:
+                            today_max, today_min = storage.db_inst.execute('select today_max, today_min from ontime_kline where coin_type=="%s" and timestamp==%s' % (self.coin_type, newest_timestamp))[0]
+                            coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0]
+                            coin_data[0] = int(coin_data[0][:-3])
+                            coin_data.append(self.coin_type)
+                            coin_data.extend([max(today_max, int(coin_data[2])), min(today_min, int(coin_data[3]))])
+                            coin_data.extend(['null'] * 5)
+                            cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, '
+                                   'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
+                                   'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(coin_data)
+                            storage.db_inst.execute(cmd)
                 time.sleep(60)
         Thread(target=thread_inner, daemon=True).start()
 
@@ -287,7 +317,6 @@ def stop_loss_view(tab):
 def update_wave_rate_task():
     # update wave rate data every day from 00:01:00 to 00:02:00
     def update_wave_rate_data():
-        print(2)
         while True:
             storage.db_inst.update_wave_rate_data()
             time.sleep(60)
@@ -296,7 +325,6 @@ def update_wave_rate_task():
 
 def clean_old_wave_rate_task():
     def clean_old_wave_rate_inner():
-        print(1)
         while True:
             storage.db_inst.clean_wave_rate_old_data()
             time.sleep(60)

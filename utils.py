@@ -1,6 +1,7 @@
 from os import path
 import logging
 import time
+from datetime import datetime as dt
 
 
 LOG_PATH = path.join(path.realpath('.'), 'trade.log')
@@ -57,6 +58,10 @@ def load_ontime_coin_type_thread(widget, *args):
                 return
     except Exception as e:
         logger.exception('load ontime coin type error: %s', e)
+
+
+def timestamp_to_date(d, fmt=None):
+    return dt.fromtimestamp(d).strftime(fmt or '%Y-%m-%d')
 
 
 import storage

@@ -281,7 +281,7 @@ class DB:
                             wave_sum_window.append(daily_wave)
             self.insert_wave_rate_batch(newest_data)
         else:
-            logger.info('no trigger wave data update')
+            pass
         self.clean_wave_rate_old_data()
 
 
