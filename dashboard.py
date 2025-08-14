@@ -101,7 +101,8 @@ class CollectDataThread:
                             logger.info('ontime_kline data is newest, no need to update')
                         elif newest_timestamp + 300 == begin_timestamp:
                             today_max, today_min = storage.db_inst.execute('select today_max, today_min from ontime_kline where coin_type=="%s" and timestamp==%s' % (self.coin_type, newest_timestamp))[0]
-                            coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0]
+                            coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0][:5]
+                            logger.info('tjhtest %s', coin_data)
                             coin_data[0] = int(coin_data[0][:-3])
                             coin_data.append(self.coin_type)
                             coin_data.extend([max(today_max, int(coin_data[2])), min(today_min, int(coin_data[3]))])
