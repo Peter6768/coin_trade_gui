@@ -86,7 +86,14 @@ class CollectDataThread:
                                'dot_op_type) values ') + ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(i)) for i in coin_data])
                         storage.db_inst.execute(cmd)
                         break
-                time.sleep(30)
+                time.sleep(15)
+
+            cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
+                   '(today_max - today_min) as today_delta, dot_neg_num, dot_pos_num, dot_final from ontime_kline '
+                   'where coin_type=="%s"') % self.coin_type
+            d = storage.db_inst.execute_df(cmd)
+            d['timestamp'] = d['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
+            stop_loss_view(notebook_view, d.sort_values(by='timestamp', ascending=True))
 
             while True:
                 if not self.stop_event.is_set():
@@ -96,13 +103,11 @@ class CollectDataThread:
                         end_timestamp = int(now - now % 300)
                         begin_timestamp = int(end_timestamp - 300)
                         newest_timestamp = storage.db_inst.execute('select max(timestamp) from ontime_kline where coin_type=="%s";' % self.coin_type)[0][0]
-                        logger.info('tjhtest newest: %s, begin: %s', newest_timestamp, begin_timestamp)
                         if newest_timestamp == begin_timestamp:
                             logger.info('ontime_kline data is newest, no need to update')
                         elif newest_timestamp + 300 == begin_timestamp:
                             today_max, today_min = storage.db_inst.execute('select today_max, today_min from ontime_kline where coin_type=="%s" and timestamp==%s' % (self.coin_type, newest_timestamp))[0]
                             coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0][:5]
-                            logger.info('tjhtest %s', coin_data)
                             coin_data[0] = int(coin_data[0][:-3])
                             coin_data.append(self.coin_type)
                             coin_data.extend([max(today_max, int(coin_data[2])), min(today_min, int(coin_data[3]))])
@@ -111,8 +116,12 @@ class CollectDataThread:
                                    'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
                                    'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(coin_data)
                             storage.db_inst.execute(cmd)
+                        self.update_dashboard()
                 time.sleep(60)
         Thread(target=thread_inner, daemon=True).start()
+
+    def update_dashboard(self):
+        pass
 
     def collect_data_thread_edit(self, *args, **kwargs):
         utils.activate_widget(*args, **kwargs)
@@ -264,11 +273,11 @@ def wave_rate_panel(notebook):
     Thread(target=wave_rate_view, daemon=True, args=(wave_rate_tab, )).start()
 
 
-def stop_loss_panel(notebook):
-    stop_loss_tab = Frame_ttk(notebook)
-    notebook.add(stop_loss_tab, text='止损数据视图')
-    notebook.pack(fill='both', expand=True)
-    stop_loss_view(stop_loss_tab)
+# def stop_loss_panel(notebook):
+#     stop_loss_tab = Frame_ttk(notebook)
+#     notebook.add(stop_loss_tab, text='止损数据视图')
+#     notebook.pack(fill='both', expand=True)
+#     stop_loss_view(stop_loss_tab)
 
 
 def wave_rate_view(tab):
@@ -300,19 +309,33 @@ def wave_rate_view(tab):
         bar_vertical.grid(row=0, column=2 * index + 1, sticky='ns')
 
 
-def stop_loss_view(tab):
-    container = Frame_ttk(tab)
-    container.pack(fill='y', expand=True)
-    container.grid_columnconfigure(0, weight=1)
-    container.grid_columnconfigure(2, weight=1)
+def stop_loss_view(notebook, data):
+    stop_loss_tab = Frame_ttk(notebook)
+    notebook.add(stop_loss_tab, text='止损数据视图')
+    notebook.pack(fill='both', expand=True)
+    container = Frame_ttk(stop_loss_tab)
+    container.pack(fill='both', expand=True)
+    container.grid_rowconfigure(0, weight=1)
+    # container.grid_columnconfigure(2, weight=1)
 
-    tree = Treeview(container, columns=[], show='headings')
+    tree = Treeview(container, columns=list(data.columns), show='headings')
+
+    col_name_map = {'coin_type': '币种名称', 'timestamp': '日期', 'begin_price': '开盘价', 'max_price': '5m最高',
+                    'min_price': '5m最低', 'last_price': '收盘价', 'today_max': '今日最高', 'today_min': '今日最低',
+                    'today_delta': '今日间隔', 'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'}
+    for col in data.columns:
+        tree.heading(col, text=col_name_map[col])
+        tree.column(col, anchor='center')
+
+    for _, row in data.iterrows():
+        tree.insert('', END, values=list(row))
 
     bar_vertical = Scrollbar(container, orient='vertical', command=tree.yview)
     tree.configure(yscrollcommand=bar_vertical.set)
+    container.columnconfigure(0, weight=1)
 
-    tree.grid(row=0, column=1, sticky="nsew")
-    bar_vertical.grid(row=0, column=2, sticky='ns')
+    tree.grid(row=0, column=0, sticky="nsew")
+    bar_vertical.grid(row=0, column=1, sticky='ns')
 
 
 def update_wave_rate_task():
@@ -341,12 +364,11 @@ def main():
     style = Style()
     style.map('TEntry', bordercolor=[('disabled', 'red')])
 
-    notebook_control = Notebook(root)
-    notebook_view = Notebook(root)
     data_collect_panel(notebook_control)
     buy_sell_panel(notebook_control)
     wave_rate_panel(notebook_control)
-    stop_loss_panel(notebook_view)
+    # stop_loss_panel(notebook_view)
+
     thread_tasks()
     root.mainloop()
 
@@ -366,5 +388,9 @@ if __name__ == '__main__':
         '固定止损报警': BooleanVar(value=True),
         '移动止损报警': BooleanVar(value=True),
     }
+
+    notebook_control = Notebook(root)
+    notebook_view = Notebook(root)
+
     collect_data_thread = CollectDataThread()
     main()
