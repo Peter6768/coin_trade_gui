@@ -56,6 +56,7 @@ class CollectDataThread:
                         day_begin_timestamp = now - (now + 8 * 3600) % 86400
                         end_timestamp = now - now % 300
                         begin_timestamp = end_timestamp - 300
+                        day_begin_timestamp = day_begin_timestamp if day_begin_timestamp < begin_timestamp else int(day_begin_timestamp) - 86400
                         resp = storage.db_inst.execute('select max(timestamp) from ontime_kline where coin_type=="%s";' % self.coin_type)
                         if resp[0][0] == begin_timestamp:
                             logger.info('ontime_kline data is newest, no need to fill')

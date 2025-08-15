@@ -146,10 +146,10 @@ class DB:
                 # daily_wave
                 daily_wave = round(float(v[2]) - float(v[3]), ndigits=8)
                 v.append(daily_wave)
-                if index < 14:
+                if index < 13:
                     v.extend(['null'] * 4)
                 else:
-                    wave_sum = sum([v_tmp[6] for v_tmp in values[index - 14: index]])
+                    wave_sum = sum([v_tmp[6] for v_tmp in values[index - 13: index + 1]])
                     avg_wave = round(wave_sum / wave_coef, ndigits=8)
                     daily_wave_rate = round(avg_wave / max(float(v[4]), 1e-8) * 100, ndigits=8)
                     wave_rate_year = round(daily_wave_rate * wave_coef_year, ndigits=8)
@@ -269,7 +269,7 @@ class DB:
                         v.append(coin_type)
                         daily_wave = round(float(v[2]) - float(v[3]), ndigits=8)
                         v.append(daily_wave)
-                        if len(wave_sum_window) < 14:
+                        if len(wave_sum_window) < 13:
                             wave_sum_window.append(daily_wave)
                             continue
                         else:
