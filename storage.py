@@ -39,6 +39,11 @@ class DB:
             'daily_wave_rate': '每日波动率',
             'wave_rate_year': '年化波动率'
         }
+        self.ontime_kline_col_name_map = {
+            'timestamp': '日期', 'coin_type': '币种名称', 'begin_price': '5m开盘', 'max_price': '5m最高',
+            'min_price': '5m最低', 'last_price': '5m收盘', 'today_max': '今日最高', 'today_min': '今日最低',
+            'today_delta': '今日间隔', 'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
+        }
 
         if not path.exists(db_path):
             logger.info('db file %s not exist, try to create.', db_path)
@@ -176,28 +181,38 @@ class DB:
             logger.info('data is initializing, return')
             return
         else:
-            resp = self.execute('select max(timestamp) from wave_rate;')
-            if len(resp) == 0 or len(resp[0]) == 0 or (not resp[0][0]):
-                return
-            newest_date = resp[0][0]
-            date_clean = int(newest_date) - 24 * 3600 * self.data_clean_timespan
-            if self.execute('select count(*) from wave_rate where timestamp<%s' % date_clean)[0][0] == 0:
-                return
-            logger.info('begin to clean old data before timestamp %s', date_clean)
-            self.execute('delete from wave_rate where timestamp < %s' % date_clean)
+            for table_name, time_span in {'wave_rate': self.data_clean_timespan, 'ontime_kline': 7}.items():
+                try:
+                    resp = self.execute('select max(timestamp) from %s;' % table_name)
+                    if len(resp) == 0 or len(resp[0]) == 0 or (not resp[0][0]):
+                        return
+                    newest_date = resp[0][0]
+                    date_clean = int(newest_date) - 24 * 3600 * time_span
+                    if self.execute('select count(*) from %s where timestamp<%s' % (table_name, date_clean))[0][0] == 0:
+                        return
+                    logger.info('begin to clean old data before timestamp %s', date_clean)
+                    self.execute('delete from %s where timestamp < %s' % (table_name, date_clean))
+                except Exception as e:
+                    logger.exception('clean old data for table %s error, continue: %s', table_name, e)
+                    continue
 
     def export_data(self, export_data_vars, wave_date_combobox):
+        def handle_output_format(sheet_name, df_inner):
+            output_format = workbook.add_format({'bold': False, 'border': 0})
+            worksheet = writer.sheets[sheet_name]
+            for col_num, value in enumerate(df_inner.columns.values):
+                worksheet.write(0, col_num, value, output_format)
+
         if self.state == 'initializing':
             logger.error('data is initializing, cannot export data')
             messagebox.showinfo('提示', '正在初始化数据, 无法导出数据')
             return
-        if export_data_vars['年化波动率']:
+        if export_data_vars['年化波动率'].get():
             wave_rate_date = wave_date_combobox.get()
             if not wave_rate_date:
                 logger.error('export wave_rate data need fill wave rate date.')
                 messagebox.showinfo('提示', '导出数据需要填写年化波动率日期')
                 return
-            self.clean_wave_rate_old_data()
             df = self.execute_df('select * from wave_rate;')
             target_date = datetime.strptime(wave_rate_date, '%Y-%m-%d')
             target_timestamp = target_date.timestamp()
@@ -211,12 +226,7 @@ class DB:
                     logger.error('export data error, file is open, please close file and retry export data')
                     messagebox.showinfo('提示', '文件已打开, 无法导出文件, 请关闭文件后重新导出')
             with ExcelWriter(table_name, engine='xlsxwriter') as writer:
-                def handle_output_format(sheet_name, df_inner):
-                    worksheet = writer.sheets[sheet_name]
-                    for col_num, value in enumerate(df_inner.columns.values):
-                        worksheet.write(0, col_num, value, output_format)
                 workbook = writer.book
-                output_format = workbook.add_format({'bold': False, 'border': 0})
                 wave_rate_rank_col_names = ['timestamp', 'wave_rate_year', 'coin_type']
                 coin_rank_sheet = df[df['timestamp'] == target_timestamp].copy()[wave_rate_rank_col_names]
                 coin_rank_sheet.sort_values(by='wave_rate_year', ascending=False, inplace=True)
@@ -232,8 +242,25 @@ class DB:
                     coin_sheet.rename(columns={**self.wave_rate_col_name_map, 'rank': '排名'}, inplace=True)
                     coin_sheet.to_excel(writer, sheet_name=coin_name, index=False)
                     handle_output_format(coin_name, coin_sheet)
-        if export_data_vars['币种止损数据']:
-            pass
+        if export_data_vars['币种止损数据'].get():
+            table_name = "5分钟数据%s.xlsx" % datetime.now().strftime('%Y-%m-%d %H-%M')
+            df = self.execute_df('select %s, (today_max - today_min) as today_delta from ontime_kline;' % ','.join([i for i in self.ontime_kline_col_name_map]))
+            if path.exists(table_name):
+                logger.info('table %s already exist, try to delete and create a new one', table_name)
+                try:
+                    remove(table_name)
+                except PermissionError:
+                    logger.exception('export data error, file is opened, please close file and retry export data')
+                    messagebox.showinfo('提示', '文件已打开, 无法导出文件, 请关闭文件后重新导出')
+            with ExcelWriter(table_name, engine='xlsxwriter') as writer:
+                workbook = writer.book
+                for one_coin in df['coin_type'].unique():
+                    coin_sheet = df[df['coin_type'] == one_coin].copy()
+                    coin_sheet.sort_values(by='timestamp', ascending=True, inplace=True)
+                    coin_sheet['timestamp'] = coin_sheet['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
+                    coin_sheet.rename(columns={**self.ontime_kline_col_name_map, 'today_delta': '今日间隔'}, inplace=True)
+                    coin_sheet.to_excel(writer, sheet_name=one_coin, index=False)
+                    handle_output_format(one_coin, coin_sheet)
         messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % path.realpath('.'))
 
     def update_wave_rate_data(self):
@@ -282,7 +309,6 @@ class DB:
             self.insert_wave_rate_batch(newest_data)
         else:
             pass
-        self.clean_wave_rate_old_data()
 
 
 db_inst = DB()

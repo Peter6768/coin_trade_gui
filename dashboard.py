@@ -79,7 +79,10 @@ class CollectDataThread:
                             v[0] = int(v[0][:-3])
                             v.append(self.coin_type)
                             today_max = max(today_max, round(float(v[2]), ndigits=8))
-                            today_min = min(today_min, round(float(v[3]), ndigits=8))
+                            if index == 0 and not today_min:
+                                today_min = round(float(v[3]))
+                            else:
+                                today_min = min(today_min, round(float(v[3]), ndigits=8))
                             v.extend([today_max, today_min])
                             v.extend(['null'] * 5)
                         cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, last_price, '
@@ -99,7 +102,6 @@ class CollectDataThread:
             while True:
                 if not self.stop_event.is_set():
                     if self.coin_type and self.coin_type != '请选择币种':
-                        coin_data = []
                         now = time.time()
                         end_timestamp = int(now - now % 300)
                         begin_timestamp = int(end_timestamp - 300)
@@ -321,11 +323,8 @@ def stop_loss_view(notebook, data):
 
     tree = Treeview(container, columns=list(data.columns), show='headings')
 
-    col_name_map = {'coin_type': '币种名称', 'timestamp': '日期', 'begin_price': '开盘价', 'max_price': '5m最高',
-                    'min_price': '5m最低', 'last_price': '收盘价', 'today_max': '今日最高', 'today_min': '今日最低',
-                    'today_delta': '今日间隔', 'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'}
     for col in data.columns:
-        tree.heading(col, text=col_name_map[col])
+        tree.heading(col, text=storage.db_inst.ontime_kline_col_name_map[col])
         tree.column(col, anchor='center')
 
     for _, row in data.iterrows():
