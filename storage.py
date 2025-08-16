@@ -130,9 +130,6 @@ class DB:
                 kline_data = data.get_kline_data(after=after_timestamp)
                 self.handle_kline_data(kline_data)
                 self.insert_wave_rate_batch(kline_data)
-            else:
-                logger.info('table wave_rate not empty. try to update new data')
-                pass
         except Exception as e:
             logger.exception('init wave_data error, reset state to ok: %s', e)
         finally:
@@ -263,7 +260,7 @@ class DB:
                     handle_output_format(one_coin, coin_sheet)
         messagebox.showinfo('提示', '数据导出完成, 文件存放在%s目录下' % path.realpath('.'))
 
-    def update_wave_rate_data(self):
+    def update_wave_rate_data(self, callback=None, callback_args=None):
         count, sleep_time = 1, 30
         while count <= 5:
             if self.state == 'initialing':
@@ -273,6 +270,9 @@ class DB:
             elif self.state == 'ok':
                 break
         start_timestamp = self.get_newest_date()
+        if not start_timestamp:
+            logger.error('query newest date empty, stop update wave data and return')
+            return
         timestamp_delta = time.time() - start_timestamp
         if timestamp_delta > 24 * 3600 * self.data_clean_timespan:
             logger.info('newest timestamp older than 90 days, try to init wave data')
@@ -296,8 +296,8 @@ class DB:
                         v.append(coin_type)
                         daily_wave = round(float(v[2]) - float(v[3]), ndigits=8)
                         v.append(daily_wave)
-                        if len(wave_sum_window) < 13:
-                            wave_sum_window.append(daily_wave)
+                        wave_sum_window.append(daily_wave)
+                        if len(wave_sum_window) < 14:
                             continue
                         else:
                             wave_sum = sum(wave_sum_window)
@@ -305,8 +305,10 @@ class DB:
                             daily_wave_rate = round(avg_wave / max(float(v[4]), 1e-8) * 100, ndigits=8)
                             wave_rate_year = round(daily_wave_rate * wave_coef_year, ndigits=8)
                             v.extend([avg_wave, wave_sum, daily_wave_rate, wave_rate_year])
-                            wave_sum_window.append(daily_wave)
             self.insert_wave_rate_batch(newest_data)
+            logger.info('update wave data finish')
+            if callback:
+                callback(callback_args)
         else:
             pass
 

@@ -43,7 +43,7 @@ def get_one_coin_kline(coin_type, begin_timestamp, end_timestamp):
         try:
             resp = marketdata_api.get_candlesticks(instId=coin_type, bar='5m', limit=24 * 12, before=begin_timestamp, after=end_timestamp)
         except httpx_ConnectError as e:
-            logger.exception('please open vpn and restart this program: %s', e)
+            logger.exception('please open vpn and restart this program. params: %s, detail: %s', (begin_timestamp, end_timestamp), e)
             showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
             exit(1)
         except Exception as e:
@@ -80,7 +80,7 @@ def get_kline_data(timespan=90, before=None, after=None):
             try:
                 resp = marketdata_api.get_candlesticks(instId=coin_name_inner, bar='1D', limit=timespan, before=before, after=after)
             except httpx_ConnectError as e:
-                logger.exception('please open vpn and restart this program: %s', e)
+                logger.exception('please open vpn and restart this program. params: %s, detail: %s', (before, after), e)
                 showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
                 exit(1)
             except Exception as e:

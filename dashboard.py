@@ -80,7 +80,7 @@ class CollectDataThread:
                             v.append(self.coin_type)
                             today_max = max(today_max, round(float(v[2]), ndigits=8))
                             if index == 0 and not today_min:
-                                today_min = round(float(v[3]))
+                                today_min = round(float(v[3]), ndigits=8)
                             else:
                                 today_min = min(today_min, round(float(v[3]), ndigits=8))
                             v.extend([today_max, today_min])
@@ -93,8 +93,8 @@ class CollectDataThread:
                 time.sleep(15)
 
             cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
-                   '(today_max - today_min) as today_delta, dot_neg_num, dot_pos_num, dot_final from ontime_kline '
-                   'where coin_type=="%s"') % self.coin_type
+                   'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from '
+                   'ontime_kline where coin_type=="%s"') % self.coin_type
             d = storage.db_inst.execute_df(cmd)
             d['timestamp'] = d['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
             stop_loss_view(notebook_view, d.sort_values(by='timestamp', ascending=True))
@@ -113,20 +113,32 @@ class CollectDataThread:
                             coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0][:5]
                             coin_data[0] = int(coin_data[0][:-3])
                             coin_data.append(self.coin_type)
-                            coin_data.extend([max(today_max, int(coin_data[2])), min(today_min, int(coin_data[3]))])
+                            coin_data.extend([max(today_max, round(float(coin_data[2]), ndigits=8)), min(today_min, round(float(coin_data[3]), ndigits=8))])
                             coin_data.extend(['null'] * 5)
                             cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, '
                                    'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
                                    'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(coin_data)
                             storage.db_inst.execute(cmd)
-                        self.update_dashboard()
-                time.sleep(60)
+                            self.update_dashboard(self.coin_type, begin_timestamp)
+                time.sleep(30)
         Thread(target=thread_inner, daemon=True).start()
 
-    def update_dashboard(self):
-        pass
+    @staticmethod
+    def update_dashboard(coin_type, begin_timestamp):
+        cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
+               'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from ontime_kline '
+               'where coin_type=="%s" and timestamp>=%s') % (coin_type, begin_timestamp)
+        data_df = storage.db_inst.execute_df(cmd)
+        data_df['timestamp'] = data_df['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
+        tree_children = stop_view_tree.get_children()
+        if len(tree_children) > 7 * 24 * 12:
+            for item in tree_children[:-7 * 24 * 12]:
+                stop_view_tree.delete(item)
+        for _, row in data_df.iterrows():
+            stop_view_tree.insert('', END, values=list(row))
 
-    def collect_data_thread_edit(self, *args, **kwargs):
+    @staticmethod
+    def collect_data_thread_edit(*args, **kwargs):
         utils.activate_widget(*args, **kwargs)
 
     def collect_data_thread_apply(self, *args, **kwargs):
@@ -152,6 +164,7 @@ def data_collect_panel(notebook):
     data_collect_frame = LabelFrame(tab, text='数据采集综合面板', padding=[10 for _ in range(4)])
     data_collect_frame.pack(side='left')
     notebook.add(tab, text='数据采集综合面板')
+    # notebook.pack()
     notebook.pack(fill='both', expand=True)
 
     # time
@@ -270,20 +283,14 @@ def buy_sell_panel(notebook):
 
 
 def wave_rate_panel(notebook):
-    wave_rate_tab = Frame_ttk(notebook)
     notebook.add(wave_rate_tab, text='年化波动率视图')
     notebook.pack(fill='both', expand=True)
     Thread(target=wave_rate_view, daemon=True, args=(wave_rate_tab, )).start()
 
 
-# def stop_loss_panel(notebook):
-#     stop_loss_tab = Frame_ttk(notebook)
-#     notebook.add(stop_loss_tab, text='止损数据视图')
-#     notebook.pack(fill='both', expand=True)
-#     stop_loss_view(stop_loss_tab)
-
-
 def wave_rate_view(tab):
+    for widget in tab.winfo_children():
+        widget.destroy()
     storage.db_inst.init_wave_data()
     data = storage.db_inst.get_recent_wave_data()
     container = Frame_ttk(tab)
@@ -313,28 +320,30 @@ def wave_rate_view(tab):
 
 
 def stop_loss_view(notebook, data):
-    stop_loss_tab = Frame_ttk(notebook)
     notebook.add(stop_loss_tab, text='止损数据视图')
     notebook.pack(fill='both', expand=True)
+    for widget in notebook.winfo_children():
+        widget.destroy()
     container = Frame_ttk(stop_loss_tab)
     container.pack(fill='both', expand=True)
     container.grid_rowconfigure(0, weight=1)
-    # container.grid_columnconfigure(2, weight=1)
 
-    tree = Treeview(container, columns=list(data.columns), show='headings')
+    global stop_view_tree
+    stop_view_tree = Treeview(container, columns=list(data.columns), show='headings')
 
+    width_map = {'timestamp': 150, 'coin_type': 150}
     for col in data.columns:
-        tree.heading(col, text=storage.db_inst.ontime_kline_col_name_map[col])
-        tree.column(col, anchor='center')
+        stop_view_tree.heading(col, text=storage.db_inst.ontime_kline_col_name_map[col])
+        stop_view_tree.column(col, width=width_map.get(col, 100), anchor='center')
 
     for _, row in data.iterrows():
-        tree.insert('', END, values=list(row))
+        stop_view_tree.insert('', END, values=list(row))
 
-    bar_vertical = Scrollbar(container, orient='vertical', command=tree.yview)
-    tree.configure(yscrollcommand=bar_vertical.set)
+    bar_vertical = Scrollbar(container, orient='vertical', command=stop_view_tree.yview)
+    stop_view_tree.configure(yscrollcommand=bar_vertical.set)
     container.columnconfigure(0, weight=1)
 
-    tree.grid(row=0, column=0, sticky="nsew")
+    stop_view_tree.grid(row=0, column=0, sticky="nsew")
     bar_vertical.grid(row=0, column=1, sticky='ns')
 
 
@@ -342,7 +351,7 @@ def update_wave_rate_task():
     # update wave rate data every day from 00:01:00 to 00:02:00
     def update_wave_rate_data():
         while True:
-            storage.db_inst.update_wave_rate_data()
+            storage.db_inst.update_wave_rate_data(wave_rate_view, wave_rate_tab)
             time.sleep(60)
     Thread(target=update_wave_rate_data, daemon=True).start()
 
@@ -391,6 +400,9 @@ if __name__ == '__main__':
 
     notebook_control = Notebook(root)
     notebook_view = Notebook(root)
+
+    wave_rate_tab = Frame_ttk(notebook_control)
+    stop_loss_tab = Frame_ttk(notebook_view)
 
     collect_data_thread = CollectDataThread()
     main()
