@@ -414,6 +414,8 @@ def alarm_task():
         while True:
             alarm_info = []
             for k, tmp_queue in {'数据缺失报警': [], '固定止损报警': alarm_thre_queue, '间隔止损报警': alarm_interval_queue, '移动止损报警': alarm_moving_queue}.items():
+                if not alarm_data_vars[k].get():
+                    continue
                 if k == '数据缺失报警':
                     table_alarms = []
                     table_map = {'wave_rate': '年化波动率', 'ontime_kline': '五分钟币种数据'}
@@ -423,6 +425,9 @@ def alarm_task():
                             logger.info('data empty, maybe initializing, continue')
                             continue
                         newest_timestamp = resp[0][0]
+                        if not newest_timestamp:
+                            logger.info('data empty, maybe initializing, continue')
+                            continue
                         if time.time() - newest_timestamp > time_span:
                             logger.error('%s data lack more than %s seconds, trigger alarm', table_name, time_span)
                             table_alarms.append('%s数据缺失' % table_map[table_name])
@@ -471,7 +476,7 @@ if __name__ == '__main__':
         '币种止损数据': BooleanVar(value=False),
     }
     alarm_data_vars = {
-        '采集数据缺失': BooleanVar(value=True),
+        '数据缺失报警': BooleanVar(value=True),
         '间隔止损报警': BooleanVar(value=True),
         '固定止损报警': BooleanVar(value=True),
         '移动止损报警': BooleanVar(value=True),

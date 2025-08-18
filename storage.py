@@ -42,7 +42,7 @@ class DB:
         self.ontime_kline_col_name_map = {
             'timestamp': '日期', 'coin_type': '币种名称', 'begin_price': '5m开盘', 'max_price': '5m最高',
             'min_price': '5m最低', 'last_price': '5m收盘', 'today_max': '今日最高', 'today_min': '今日最低',
-            'today_delta': '今日间隔', 'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
+            'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
         }
 
         if not path.exists(db_path):
@@ -126,7 +126,7 @@ class DB:
             if row_num == 0:
                 logger.info('table wave_rate is empty, try to initialize')
                 now = time.time()
-                after_timestamp = int((now - now % 86400 - 8 * 3600) * 1000)
+                after_timestamp = int((now - (now + 8 * 3600) % 86400) * 1000)
                 kline_data = data.get_kline_data(after=after_timestamp)
                 self.handle_kline_data(kline_data)
                 self.insert_wave_rate_batch(kline_data)
