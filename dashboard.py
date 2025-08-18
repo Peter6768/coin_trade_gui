@@ -4,6 +4,8 @@ from datetime import datetime
 from functools import partial
 from configparser import ConfigParser
 from collections import deque
+import winsound
+from os import linesep
 
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
@@ -14,6 +16,11 @@ import utils
 import storage
 
 logger = utils.get_logger()
+
+alarm_data_lack_queue = deque()
+alarm_interval_queue = deque()
+alarm_moving_queue = deque()
+alarm_thre_queue = deque()
 
 
 class CollectDataThread:
@@ -109,12 +116,40 @@ class CollectDataThread:
                         if newest_timestamp == begin_timestamp:
                             logger.info('ontime_kline data is newest, no need to update')
                         elif newest_timestamp + 300 == begin_timestamp:
-                            today_max, today_min = storage.db_inst.execute('select today_max, today_min from ontime_kline where coin_type=="%s" and timestamp==%s' % (self.coin_type, newest_timestamp))[0]
+                            prev_pos, prev_neg, prev_key, prev_final, prev_op_type, prev_win_top, prev_win_bottom, prev_today_max, prev_today_min = storage.db_inst.execute('select dot_pos_num, dot_neg_num, dot_key_value, dot_final, dot_op_type, max_price, min_price, today_max, today_min from ontime_kline where coin_type=="%s" and timestamp==%s' % (self.coin_type, newest_timestamp))[0]
                             coin_data = data.get_one_coin_kline(self.coin_type, begin_timestamp * 1000 - 1, end_timestamp * 1000)[0][:5]
                             coin_data[0] = int(coin_data[0][:-3])
                             coin_data.append(self.coin_type)
-                            coin_data.extend([max(today_max, round(float(coin_data[2]), ndigits=8)), min(today_min, round(float(coin_data[3]), ndigits=8))])
-                            coin_data.extend(['null'] * 5)
+                            today_max, today_min = max(prev_today_max, round(float(coin_data[2]), ndigits=8)), min(prev_today_min, round(float(coin_data[3]), ndigits=8))
+                            coin_data.extend([today_max, today_min])
+                            # handle stop loss
+                            win_top, win_bottom = coin_data[2], coin_data[3]
+                            if win_top > prev_today_max:
+                                dot_key_value = prev_win_bottom
+                                dot_neg_num = 1 if win_top < dot_key_value else 0
+                                dot_pos_num = 1 - dot_neg_num
+                                dot_final = dot_pos_num - dot_neg_num
+                                dot_op_type = 'pos'
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                            elif win_bottom < prev_today_min:
+                                dot_key_value = prev_win_top
+                                dot_neg_num = 1 if win_top <= dot_key_value else 0
+                                dot_pos_num = 1 - dot_neg_num
+                                dot_final = dot_pos_num - dot_neg_num
+                                dot_op_type = 'neg'
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                            elif prev_op_type == 'pos' and prev_final != -1:
+                                dot_neg_num = prev_neg + (1 if win_top < prev_key else 0)
+                                dot_pos_num = prev_pos + (1 if win_top >= prev_key else 0)
+                                dot_final = dot_pos_num - dot_neg_num
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                            elif prev_op_type == 'neg' and prev_final != 1:
+                                dot_neg_num = prev_neg + (1 if win_top <= prev_key else 0)
+                                dot_pos_num = prev_pos + (1 if win_top > prev_key else 0)
+                                dot_final = dot_pos_num - dot_neg_num
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                            else:
+                                coin_data.extend(['null'] * 5)
                             cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, '
                                    'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
                                    'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(coin_data)
@@ -364,9 +399,53 @@ def clean_old_wave_rate_task():
     Thread(target=clean_old_wave_rate_inner, daemon=True).start()
 
 
+def alarm_task():
+    alarm_inner_state = False
+
+    def alarm_sound_play():
+        nonlocal alarm_inner_state
+        while alarm_inner_state:
+            for _ in range(3):
+                winsound.Beep(1000, 500)
+                time.sleep(.2)
+            time.sleep(2)
+
+    def alarm_inner():
+        while True:
+            alarm_info = []
+            for k, tmp_queue in {'数据缺失报警': [], '固定止损报警': alarm_thre_queue, '间隔止损报警': alarm_interval_queue, '移动止损报警': alarm_moving_queue}.items():
+                if k == '数据缺失报警':
+                    table_alarms = []
+                    table_map = {'wave_rate': '年化波动率', 'ontime_kline': '五分钟币种数据'}
+                    for table_name, time_span in {'wave_rate': 24 * 3600 * 2 + 6 * 60, 'ontime_kline': 16 * 60}.items():
+                        resp = storage.db_inst.execute('select max(timestamp) from %s;' % table_name)
+                        if not resp:
+                            logger.info('data empty, maybe initializing, continue')
+                            continue
+                        newest_timestamp = resp[0][0]
+                        if time.time() - newest_timestamp > time_span:
+                            logger.error('%s data lack more than %s seconds, trigger alarm', table_name, time_span)
+                            table_alarms.append('%s数据缺失' % table_map[table_name])
+                    if table_alarms:
+                        alarm_info.append(':'.join([k, ','.join(table_alarms)]))
+                elif len(tmp_queue) > 0:
+                    alarm_info.append(':'.join([k, tmp_queue.pop()]))
+            if alarm_info:
+                nonlocal alarm_inner_state
+                alarm_inner_state = True
+                sound_alarm_thread = Thread(target=alarm_sound_play, daemon=True)
+                sound_alarm_thread.start()
+                showinfo('警告', linesep.join(alarm_info))
+                alarm_inner_state = False
+                sound_alarm_thread.join()
+            time.sleep(15)
+    Thread(target=alarm_inner, daemon=True).start()
+
+
 def thread_tasks():
     update_wave_rate_task()
     clean_old_wave_rate_task()
+    alarm_task()
 
 
 def main():
