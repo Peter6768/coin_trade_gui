@@ -1,6 +1,6 @@
 from concurrent import futures
 import time
-from httpcore import ConnectError as httpcore_ConnectError
+# from httpcore import ConnectError as httpcore_ConnectError
 from httpx import ConnectError as httpx_ConnectError
 
 import okx.PublicData

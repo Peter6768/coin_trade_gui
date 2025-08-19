@@ -1,5 +1,6 @@
 from os import path
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import time
 from datetime import datetime as dt
 
@@ -17,10 +18,14 @@ def get_logger():
     logger_inner = logging.getLogger('trade')
     logger_inner.setLevel(logging.INFO)
 
-    file_handler = logging.FileHandler(LOG_PATH, encoding='utf-8')
-    file_handler.setFormatter(log_format)
+    # file_handler = logging.FileHandler(LOG_PATH, encoding='utf-8')
+    # file_handler.setFormatter(log_format)
 
-    logger_inner.addHandler(file_handler)
+    # logger_inner.addHandler(file_handler)
+    handler = TimedRotatingFileHandler(filename=LOG_PATH, when='midnight', interval=1, backupCount=3, encoding='utf-8')
+    handler.setFormatter(log_format)
+
+    logger_inner.addHandler(handler)
 
     return logger_inner
 

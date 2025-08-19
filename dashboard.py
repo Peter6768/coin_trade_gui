@@ -2,7 +2,7 @@ from threading import Thread, Event, Lock
 import time
 from datetime import datetime
 from functools import partial
-from configparser import ConfigParser
+# from configparser import ConfigParser
 from collections import deque
 import winsound
 from os import linesep
