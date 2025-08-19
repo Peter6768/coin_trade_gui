@@ -7,7 +7,7 @@ from collections import deque
 import winsound
 from os import linesep
 
-from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar
+from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar, IntVar, DoubleVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
 from tkinter.messagebox import showinfo
 
@@ -123,7 +123,9 @@ class CollectDataThread:
                             today_max, today_min = max(prev_today_max, round(float(coin_data[2]), ndigits=8)), min(prev_today_min, round(float(coin_data[3]), ndigits=8))
                             coin_data.extend([today_max, today_min])
                             # handle stop loss
-                            win_top, win_bottom = coin_data[2], coin_data[3]
+                            win_top, win_bottom = round(float(coin_data[2]), ndigits=8), round(float(coin_data[3]), ndigits=8)
+                            interval_loss = None
+                            moving_loss = None
                             if win_top > prev_today_max:
                                 dot_key_value = prev_win_bottom
                                 dot_neg_num = 1 if win_top < dot_key_value else 0
@@ -131,6 +133,8 @@ class CollectDataThread:
                                 dot_final = dot_pos_num - dot_neg_num
                                 dot_op_type = 'pos'
                                 coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                                interval_loss = today_min
+                                moving_loss = '负数'
                             elif win_bottom < prev_today_min:
                                 dot_key_value = prev_win_top
                                 dot_neg_num = 1 if win_top <= dot_key_value else 0
@@ -138,28 +142,64 @@ class CollectDataThread:
                                 dot_final = dot_pos_num - dot_neg_num
                                 dot_op_type = 'neg'
                                 coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                                interval_loss = today_max
+                                moving_loss = '正数'
                             elif prev_op_type == 'pos' and prev_final != -1:
+                                interval_loss = today_min
                                 dot_neg_num = prev_neg + (1 if win_top < prev_key else 0)
                                 dot_pos_num = prev_pos + (1 if win_top >= prev_key else 0)
                                 dot_final = dot_pos_num - dot_neg_num
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                                if dot_final == -1:
+                                    logger.info('coin %s trigger moving stop loss', self.coin_type)
+                                    alarm_moving_queue.append('币种%s触发移动止损' % self.coin_type)
+                                    coin_data.extend(['null'] * 5)
+                                elif win_top < today_min:
+                                    logger.info('coin %s trigger interval loss', self.coin_type)
+                                    alarm_interval_queue.append('币种%s触发间隔止损' % self.coin_type)
+                                    coin_data.extend(['null'] * 5)
+                                elif win_top < prev_key:
+                                    logger.info('coin %s trigger threshold loss', self.coin_type)
+                                    alarm_thre_queue.append('币种%s触发固定止损' % self.coin_type)
+                                    coin_data.extend(['null'] * 5)
+                                else:
+                                    coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
                             elif prev_op_type == 'neg' and prev_final != 1:
-                                dot_neg_num = prev_neg + (1 if win_top <= prev_key else 0)
-                                dot_pos_num = prev_pos + (1 if win_top > prev_key else 0)
+                                interval_loss = today_max
+                                dot_neg_num = prev_neg + (1 if win_bottom <= prev_key else 0)
+                                dot_pos_num = prev_pos + (1 if win_bottom > prev_key else 0)
                                 dot_final = dot_pos_num - dot_neg_num
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                                if dot_final == 1:
+                                    logger.info('coin %s trigger moving stop loss', self.coin_type)
+                                    alarm_moving_queue.append(['币种%s触发移动止损' % self.coin_type])
+                                    coin_data.extend(['null'] * 5)
+                                elif win_bottom > today_max:
+                                    logger.info('coin %s trigger interval loss', self.coin_type)
+                                    alarm_interval_queue.append('币种%s触发间隔止损' % self.coin_type)
+                                    coin_data.extend(['null'] * 5)
+                                elif win_bottom > prev_key:
+                                    logger.info('coin %s trigger threshold loss', self.coin_type)
+                                    alarm_thre_queue.append('币种%s触发固定止损' % self.coin_type)
+                                    coin_data.extend(['null'] * 5)
+                                else:
+                                    coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
                             else:
                                 coin_data.extend(['null'] * 5)
                             cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, '
                                    'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
-                                   'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(coin_data)
+                                   'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,"%s")' % tuple(coin_data)
                             storage.db_inst.execute(cmd)
-                            self.update_dashboard(self.coin_type, begin_timestamp)
+                            self.update_dashboard(self.coin_type, begin_timestamp, today_max, today_min, interval_loss, moving_loss)
                 time.sleep(30)
         Thread(target=thread_inner, daemon=True).start()
 
     @staticmethod
-    def update_dashboard(coin_type, begin_timestamp):
+    def update_dashboard(coin_type, begin_timestamp, threshold_top, threshold_bottom, interval_loss, moving_loss):
+        threshold_top_entry.set(threshold_top)
+        threshold_bottom_entry.set(threshold_bottom)
+        if interval_loss:
+            interval_loss_entry.set(interval_loss)
+        if moving_loss:
+            moving_loss_entry.set(moving_loss)
         cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
                'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from ontime_kline '
                'where coin_type=="%s" and timestamp>=%s') % (coin_type, begin_timestamp)
@@ -246,10 +286,10 @@ def data_collect_panel(notebook):
     fixed_threshold_frame = Frame_tk(data_collect_frame)
     fixed_threshold_frame.pack(anchor='w', fill='x')
     Label(fixed_threshold_frame, text='固定值破位低').pack(side='left')
-    fixed_threshold_entry1 = Entry(fixed_threshold_frame, state='disabled')
+    fixed_threshold_entry1 = Entry(fixed_threshold_frame, state='disabled', textvariable=threshold_bottom_entry)
     fixed_threshold_entry1.pack(side='left')
     Label(fixed_threshold_frame, text='固定值破位高').pack(side='left')
-    fixed_threshold_entry2 = Entry(fixed_threshold_frame, state='disabled')
+    fixed_threshold_entry2 = Entry(fixed_threshold_frame, state='disabled', textvariable=threshold_top_entry)
     fixed_threshold_entry2.pack(side='left')
     fixed_threshold_set = Button(fixed_threshold_frame, text='修改', command=lambda: utils.activate_widget(fixed_threshold_entry1, fixed_threshold_entry2, fixed_threshold_apply))
     fixed_threshold_set.pack(side='right')
@@ -259,7 +299,7 @@ def data_collect_panel(notebook):
     interval_threshold_frame = Frame_tk(data_collect_frame)
     interval_threshold_frame.pack(anchor='w', fill='x')
     Label(interval_threshold_frame, text='间隔止损报警位').pack(side='left')
-    interval_threshold_entry = Entry(interval_threshold_frame, state='disabled')
+    interval_threshold_entry = Entry(interval_threshold_frame, state='disabled', textvariable=interval_loss_entry)
     interval_threshold_entry.pack(side='left')
     interval_threshold_set = Button(interval_threshold_frame, text='修改', command=lambda: utils.activate_widget(interval_threshold_entry, interval_threshold_apply))
     interval_threshold_set.pack(side='right')
@@ -269,7 +309,7 @@ def data_collect_panel(notebook):
     moving_threshold_frame = Frame_tk(data_collect_frame)
     moving_threshold_frame.pack(anchor='w', fill='x')
     Label(moving_threshold_frame, text='移动止损报警位').pack(side='left')
-    moving_threshold_entry = Entry(moving_threshold_frame, state='disabled')
+    moving_threshold_entry = Entry(moving_threshold_frame, state='disabled', textvariable=moving_loss_entry)
     moving_threshold_entry.pack(side='left')
     moving_threshold_set = Button(moving_threshold_frame, text='修改', command=lambda: utils.activate_widget(moving_threshold_entry, moving_threshold_apply))
     moving_threshold_set.pack(side='right')
@@ -357,7 +397,7 @@ def wave_rate_view(tab):
 def stop_loss_view(notebook, data):
     notebook.add(stop_loss_tab, text='止损数据视图')
     notebook.pack(fill='both', expand=True)
-    for widget in notebook.winfo_children():
+    for widget in stop_loss_tab.winfo_children():
         widget.destroy()
     container = Frame_ttk(stop_loss_tab)
     container.pack(fill='both', expand=True)
@@ -460,7 +500,6 @@ def main():
     data_collect_panel(notebook_control)
     buy_sell_panel(notebook_control)
     wave_rate_panel(notebook_control)
-    # stop_loss_panel(notebook_view)
 
     thread_tasks()
     root.mainloop()
@@ -469,6 +508,8 @@ def main():
 if __name__ == '__main__':
     root = Tk()
     root.title('量化交易窗口工具')
+
+    # vars
     collect_data_radio = StringVar(value='no')
     manual_collect_radio = StringVar(value='stop')
     export_data_vars = {
@@ -481,6 +522,10 @@ if __name__ == '__main__':
         '固定止损报警': BooleanVar(value=True),
         '移动止损报警': BooleanVar(value=True),
     }
+    threshold_top_entry = DoubleVar()
+    threshold_bottom_entry = DoubleVar()
+    interval_loss_entry = DoubleVar()
+    moving_loss_entry = StringVar()
 
     notebook_control = Notebook(root)
     notebook_view = Notebook(root)

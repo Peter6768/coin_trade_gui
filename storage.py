@@ -42,7 +42,7 @@ class DB:
         self.ontime_kline_col_name_map = {
             'timestamp': '日期', 'coin_type': '币种名称', 'begin_price': '5m开盘', 'max_price': '5m最高',
             'min_price': '5m最低', 'last_price': '5m收盘', 'today_max': '今日最高', 'today_min': '今日最低',
-            'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
+            'today_delta': '今日间隔','dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
         }
 
         if not path.exists(db_path):
@@ -241,7 +241,7 @@ class DB:
                     handle_output_format(coin_name, coin_sheet)
         if export_data_vars['币种止损数据'].get():
             table_name = "5分钟数据%s.xlsx" % datetime.now().strftime('%Y-%m-%d %H-%M')
-            df = self.execute_df('select %s, (today_max - today_min) as today_delta from ontime_kline;' % ','.join([i for i in self.ontime_kline_col_name_map]))
+            df = self.execute_df('select %s, (today_max - today_min) as today_delta from ontime_kline;' % ','.join([i for i in self.ontime_kline_col_name_map if i != 'today_delta']))
             if path.exists(table_name):
                 logger.info('table %s already exist, try to delete and create a new one', table_name)
                 try:
