@@ -253,8 +253,8 @@ def data_collect_panel(notebook):
     collect_data_frame = Frame_tk(data_collect_frame)
     collect_data_frame.pack(anchor='w', fill='x')
     Label(collect_data_frame, text='行情采集').pack(side='left')
-    collect_data_radio1 = Radiobutton(collect_data_frame, text='采集', variable=collect_data_radio, value='yes', state='disabled')
-    collect_data_radio2 = Radiobutton(collect_data_frame, text='停止采集', variable=collect_data_radio, value='no', state='disabled')
+    collect_data_radio1 = Radiobutton(collect_data_frame, text='运行', variable=collect_data_radio, value='yes', state='disabled')
+    collect_data_radio2 = Radiobutton(collect_data_frame, text='停止', variable=collect_data_radio, value='no', state='disabled')
     collect_data_coin_name = Combobox(collect_data_frame, state='disabled')
     collect_data_coin_name.set('请选择币种')
     collect_data_coin_name.bind('<Button-1>', partial(utils.load_ontime_coin_type_thread, collect_data_coin_name))
@@ -269,9 +269,9 @@ def data_collect_panel(notebook):
 
     manual_collect_frame = Frame_tk(data_collect_frame)
     manual_collect_frame.pack(anchor='w', fill='x')
-    Label(manual_collect_frame, text='手动回补数据').pack(side='left')
-    manual_collect_radio1 = Radiobutton(manual_collect_frame, text='开始回补', variable=manual_collect_radio, value='start', state='disabled')
-    manual_collect_radio2 = Radiobutton(manual_collect_frame, text='停止回补', variable=manual_collect_radio, value='stop', state='disabled')
+    Label(manual_collect_frame, text='数据手动回补').pack(side='left')
+    manual_collect_radio1 = Radiobutton(manual_collect_frame, text='运行', variable=manual_collect_radio, value='start', state='disabled')
+    manual_collect_radio2 = Radiobutton(manual_collect_frame, text='停止', variable=manual_collect_radio, value='stop', state='disabled')
     manual_collect_set = Button(manual_collect_frame, text='修改', command=lambda: utils.activate_widget(manual_collect_radio1, manual_collect_radio2, manual_collect_apply))
     manual_collect_apply = Button(manual_collect_frame, text='应用', state='disabled', command=lambda: utils.disable_widget(manual_collect_radio1, manual_collect_radio2, manual_collect_apply))
 
@@ -425,6 +425,8 @@ def stop_loss_view(notebook, data):
 
     global stop_view_tree
     stop_view_tree = Treeview(container, columns=list(data.columns), show='headings')
+    stop_view_tree.tag_configure('lightgreen', background='lightgreen')
+    stop_view_tree.tag_configure('lightred', background='lightred')
 
     width_map = {'timestamp': 150, 'coin_type': 150}
     for col in data.columns:
@@ -514,9 +516,6 @@ def thread_tasks():
 
 
 def main():
-    style = Style()
-    style.map('TEntry', bordercolor=[('disabled', 'red')])
-
     data_collect_panel(notebook_control)
     buy_sell_panel(notebook_control)
     wave_rate_panel(notebook_control)
@@ -556,4 +555,8 @@ if __name__ == '__main__':
     stop_loss_tab = Frame_ttk(notebook_view)
 
     collect_data_thread = CollectDataThread()
+
+    style = Style()
+    style.map('TEntry', bordercolor=[('disabled', 'red')])
+
     main()
