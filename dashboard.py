@@ -99,10 +99,11 @@ class CollectDataThread:
                         break
                 time.sleep(15)
 
-            cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
+            cmd = ('select timestamp, begin_price, last_price, min_price, max_price, today_min, today_max,'
                    'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from '
                    'ontime_kline where coin_type=="%s"') % self.coin_type
             d = storage.db_inst.execute_df(cmd)
+            d.fillna('', inplace=True)
             d['timestamp'] = d['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
             stop_loss_view(notebook_view, d.sort_values(by='timestamp', ascending=True))
 
@@ -425,9 +426,6 @@ def stop_loss_view(notebook, data):
 
     global stop_view_tree
     stop_view_tree = Treeview(container, columns=list(data.columns), show='headings')
-    stop_view_tree.tag_configure('lightgreen', background='lightgreen')
-    stop_view_tree.tag_configure('lightred', background='lightred')
-
     width_map = {'timestamp': 150, 'coin_type': 150}
     for col in data.columns:
         stop_view_tree.heading(col, text=storage.db_inst.ontime_kline_col_name_map[col])

@@ -40,8 +40,8 @@ class DB:
             'wave_rate_year': '年化波动率'
         }
         self.ontime_kline_col_name_map = {
-            'timestamp': '日期', 'coin_type': '币种名称', 'begin_price': '5m开盘', 'max_price': '5m最高',
-            'min_price': '5m最低', 'last_price': '5m收盘', 'today_max': '今日最高', 'today_min': '今日最低',
+            'timestamp': '时间', 'coin_type': '币种名称', 'begin_price': '5M开盘', 'max_price': '5M最高',
+            'min_price': '5M最低', 'last_price': '5M收盘', 'today_max': '今日最高', 'today_min': '今日最低',
             'today_delta': '今日间隔','dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
         }
 
