@@ -185,12 +185,12 @@ class CollectDataThread:
                                 elif win_bottom > today_max:
                                     logger.info('coin %s trigger interval loss', self.coin_type)
                                     alarm_interval_queue.append('币种%s触发间隔止损' % self.coin_type)
-                                    dot_final = -1
+                                    dot_final = 1
                                     kline_log = '间隔止损平仓'
                                 elif win_bottom > prev_key:
                                     logger.info('coin %s trigger threshold loss', self.coin_type)
                                     alarm_thre_queue.append('币种%s触发固定止损' % self.coin_type)
-                                    dot_final = -1
+                                    dot_final = 1
                                     kline_log = '固定止损平仓'
                                 coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type, kline_log])
                             else:
