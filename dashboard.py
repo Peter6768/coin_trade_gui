@@ -10,6 +10,8 @@ from os import linesep
 from tkinter import Frame as Frame_tk, END, Tk, StringVar, BooleanVar, IntVar, DoubleVar
 from tkinter.ttk import Frame as Frame_ttk, LabelFrame, Label, Radiobutton, Combobox, Button, Entry, Checkbutton, Treeview, Scrollbar, Style, Notebook
 from tkinter.messagebox import showinfo
+from numpy import isnan
+from pandas import isna
 
 import data
 import utils
@@ -26,10 +28,11 @@ alarm_thre_queue = deque()
 class CollectDataThread:
     def __init__(self):
         self.stop_event = Event()
+        self.stop_event.set()
         self.coin_type = ''
         self.mutex = Lock()
         self.ontime_data_window = deque(maxlen=2)
-        self.thread_start()
+        self.ontime_kline_thread = None
 
     @staticmethod
     def get_timestamp():
@@ -97,13 +100,14 @@ class CollectDataThread:
                                'dot_op_type) values ') + ','.join([('(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,%s)' % tuple(i)) for i in coin_data])
                         storage.db_inst.execute(cmd)
                         break
-                time.sleep(15)
+                time.sleep(10)
 
             cmd = ('select timestamp, begin_price, last_price, min_price, max_price, today_min, today_max,'
-                   'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from '
+                   'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final, log from '
                    'ontime_kline where coin_type=="%s"') % self.coin_type
             d = storage.db_inst.execute_df(cmd)
-            d.fillna('', inplace=True)
+            na_cols = ['dot_neg_num', 'dot_pos_num', 'dot_final', 'log']
+            d[na_cols] = d[na_cols].map(lambda x: "" if ((x is None) or isna(x)) else x)
             d['timestamp'] = d['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
             stop_loss_view(notebook_view, d.sort_values(by='timestamp', ascending=True))
 
@@ -128,23 +132,24 @@ class CollectDataThread:
                             interval_loss = None
                             moving_loss = None
                             thre_loss = None
+                            kline_log = ""
                             if win_top > prev_today_max:
                                 dot_key_value = prev_win_bottom
                                 dot_neg_num = 1 if win_top < dot_key_value else 0
                                 dot_pos_num = 1 - dot_neg_num
                                 dot_final = dot_pos_num - dot_neg_num
                                 dot_op_type = 'pos'
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type, kline_log])
                                 interval_loss = today_min
                                 moving_loss = '负数'
                                 thre_loss = dot_key_value
                             elif win_bottom < prev_today_min:
                                 dot_key_value = prev_win_top
-                                dot_neg_num = 1 if win_top <= dot_key_value else 0
+                                dot_neg_num = 1 if win_bottom <= dot_key_value else 0
                                 dot_pos_num = 1 - dot_neg_num
                                 dot_final = dot_pos_num - dot_neg_num
                                 dot_op_type = 'neg'
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type])
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, dot_key_value, dot_op_type, kline_log])
                                 interval_loss = today_max
                                 moving_loss = '正数'
                                 thre_loss = dot_key_value
@@ -156,13 +161,18 @@ class CollectDataThread:
                                 if dot_final == -1:
                                     logger.info('coin %s trigger moving stop loss', self.coin_type)
                                     alarm_moving_queue.append('币种%s触发移动止损' % self.coin_type)
+                                    kline_log = '移动止损平仓'
                                 elif win_top < today_min:
                                     logger.info('coin %s trigger interval loss', self.coin_type)
                                     alarm_interval_queue.append('币种%s触发间隔止损' % self.coin_type)
+                                    dot_final = -1
+                                    kline_log = '间隔止损平仓'
                                 elif win_top < prev_key:
                                     logger.info('coin %s trigger threshold loss', self.coin_type)
                                     alarm_thre_queue.append('币种%s触发固定止损' % self.coin_type)
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                                    dot_final = -1
+                                    kline_log = '固定止损平仓'
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type, kline_log])
                             elif prev_op_type == 'neg' and prev_final != 1:
                                 interval_loss = today_max
                                 dot_neg_num = prev_neg + (1 if win_bottom <= prev_key else 0)
@@ -171,21 +181,26 @@ class CollectDataThread:
                                 if dot_final == 1:
                                     logger.info('coin %s trigger moving stop loss', self.coin_type)
                                     alarm_moving_queue.append(['币种%s触发移动止损' % self.coin_type])
+                                    kline_log = '移动止损平仓'
                                 elif win_bottom > today_max:
                                     logger.info('coin %s trigger interval loss', self.coin_type)
                                     alarm_interval_queue.append('币种%s触发间隔止损' % self.coin_type)
+                                    dot_final = -1
+                                    kline_log = '间隔止损平仓'
                                 elif win_bottom > prev_key:
                                     logger.info('coin %s trigger threshold loss', self.coin_type)
                                     alarm_thre_queue.append('币种%s触发固定止损' % self.coin_type)
-                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type])
+                                    dot_final = -1
+                                    kline_log = '固定止损平仓'
+                                coin_data.extend([dot_neg_num, dot_pos_num, dot_final, prev_key, prev_op_type, kline_log])
                             else:
-                                coin_data.extend(['null'] * 5)
+                                coin_data.extend(['null'] * 6)
                             cmd = ('insert into ontime_kline (timestamp, begin_price, max_price, min_price, '
                                    'last_price, coin_type, today_max, today_min, dot_neg_num, dot_pos_num, '
-                                   'dot_final, dot_key_value, dot_op_type) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,"%s")' % tuple(coin_data)
+                                   'dot_final, dot_key_value, dot_op_type, log) values ') + '(%s,%s,%s,%s,%s,"%s",%s,%s,%s,%s,%s,%s,"%s","%s")' % tuple(coin_data)
                             storage.db_inst.execute(cmd)
                             self.update_dashboard(self.coin_type, begin_timestamp, today_max, today_min, interval_loss, moving_loss, thre_loss)
-                time.sleep(30)
+                time.sleep(10)
         Thread(target=thread_inner, daemon=True).start()
 
     @staticmethod
@@ -198,11 +213,13 @@ class CollectDataThread:
             moving_loss_entry.set(moving_loss)
         if thre_loss:
             thre_loss_entry.set(thre_loss)
-        cmd = ('select coin_type, timestamp, begin_price, max_price, min_price, last_price, today_max, today_min,'
-               'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final from ontime_kline '
+        cmd = ('select timestamp, begin_price, last_price, min_price, max_price, today_min, today_max,'
+               'round(today_max - today_min, 5) as today_delta, dot_neg_num, dot_pos_num, dot_final, log from ontime_kline '
                'where coin_type=="%s" and timestamp>=%s') % (coin_type, begin_timestamp)
         data_df = storage.db_inst.execute_df(cmd)
         data_df['timestamp'] = data_df['timestamp'].map(lambda x: datetime.fromtimestamp(x).strftime('%Y-%m-%d %H:%M'))
+        na_cols = ['dot_neg_num', 'dot_pos_num', 'dot_final', 'log']
+        data_df[na_cols] = data_df[na_cols].map(lambda x: "" if ((x is None) or isna(x)) else x)
         tree_children = stop_view_tree.get_children()
         if len(tree_children) > 7 * 24 * 12:
             for item in tree_children[:-7 * 24 * 12]:
@@ -210,21 +227,32 @@ class CollectDataThread:
         for _, row in data_df.iterrows():
             stop_view_tree.insert('', END, values=list(row))
 
-    @staticmethod
-    def collect_data_thread_edit(*args, **kwargs):
+    def collect_data_thread_edit(self, *args, **kwargs):
         utils.activate_widget(*args, **kwargs)
 
     def collect_data_thread_apply(self, *args, **kwargs):
         coin_type_widget = kwargs.get('coin_type', None)
         if coin_type_widget:
             v = coin_type_widget.get()
-            if v == '请选择币种':
+            if v == '请选择币种' or not v:
                 pass
             else:
-                self.coin_type = v
                 action = collect_data_radio.get()
                 if action == 'yes':
+                    if self.ontime_kline_thread is not None:
+                        self.stop_event.set()
+                        self.ontime_kline_thread.join()
+
+                    self.coin_type = v
+                    threshold_top_entry.set(0)
+                    threshold_bottom_entry.set(0)
+                    interval_loss_entry.set(0)
+                    moving_loss_entry.set("")
+                    thre_loss_entry.set(0)
+
                     self.stop_event.clear()
+                    self.ontime_kline_thread = Thread(target=self.thread_start, daemon=True)
+                    self.ontime_kline_thread.start()
                 elif action == 'no':
                     self.stop_event.set()
             utils.disable_widget(kwargs.get('coin_type'))
@@ -238,7 +266,7 @@ def data_collect_panel(notebook):
     data_collect_frame.pack(side='left')
     notebook.add(tab, text='数据采集综合面板')
     # notebook.pack()
-    notebook.pack(fill='both', expand=True)
+    notebook.pack(fill='x')
 
     # time
     def update_time():
@@ -375,12 +403,11 @@ def data_collect_panel(notebook):
 def buy_sell_panel(notebook):
     tab = Frame_ttk(notebook)
     notebook.add(tab, text='清仓/挂单综合面板')
-    notebook.pack(fill='both', expand=True)
+    # notebook.pack(fill='both', expand=True)
 
 
 def wave_rate_panel(notebook):
     notebook.add(wave_rate_tab, text='年化波动率视图')
-    notebook.pack(fill='both', expand=True)
     Thread(target=wave_rate_view, daemon=True, args=(wave_rate_tab, )).start()
 
 
@@ -426,6 +453,8 @@ def stop_loss_view(notebook, data):
 
     global stop_view_tree
     stop_view_tree = Treeview(container, columns=list(data.columns), show='headings')
+    stop_view_tree.tag_configure('red', foreground='red')
+    stop_view_tree.tag_configure('green', foreground='green')
     width_map = {'timestamp': 150, 'coin_type': 150}
     for col in data.columns:
         stop_view_tree.heading(col, text=storage.db_inst.ontime_kline_col_name_map[col])
@@ -497,12 +526,15 @@ def alarm_task():
                     alarm_info.append(':'.join([k, tmp_queue.pop()]))
             if alarm_info:
                 nonlocal alarm_inner_state
-                alarm_inner_state = True
-                sound_alarm_thread = Thread(target=alarm_sound_play, daemon=True)
-                sound_alarm_thread.start()
-                showinfo('警告', linesep.join(alarm_info))
-                alarm_inner_state = False
-                sound_alarm_thread.join()
+                if sound_alarm_panel_var.get() == 'yes':
+                    alarm_inner_state = True
+                    sound_alarm_thread = Thread(target=alarm_sound_play, daemon=True)
+                    sound_alarm_thread.start()
+                    showinfo('警告', linesep.join(alarm_info))
+                    alarm_inner_state = False
+                    sound_alarm_thread.join()
+                else:
+                    showinfo('警告', linesep.join(alarm_info))
             time.sleep(15)
     Thread(target=alarm_inner, daemon=True).start()
 

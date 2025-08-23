@@ -16,22 +16,21 @@ FLAG = '0'    # 0: real trade, 1: simulate trade
 
 def get_all_coin_name(coin_type='SWAP'):
     """/api/v5/public/instruments"""
-    coin_names = []
     publicdata_api = okx.PublicData.PublicAPI(flag=FLAG)
-    try:
-        rst = publicdata_api.get_instruments(instType=coin_type)
-        if not rst['code']:
-            logger.error('get coin name error. return code is %s, error occur: %s', rst['code'], rst['msg'])
-            raise Exception('get coin name error')
-        coin_names = [i for i in {j['instId'] for j in rst['data'] if ('usdt' in j['instId'].lower() and j['instType'] == 'SWAP' and ('test' not in j['instId'].lower()))}]
-        coin_names.sort()
-    except httpx_ConnectError as e:
-        logger.exception('please open vpn and restart this program: %s', e)
-        showinfo('提示', '无法采集数据, 请打开vpn后重启程序')
-        exit(1)
-    except Exception as e:
-        logger.exception('get all coin name via public data api error: %s', e)
-    finally:
+    retry_count = 1
+    while retry_count <= 3:
+        try:
+            rst = publicdata_api.get_instruments(instType=coin_type)
+            if not rst['code']:
+                logger.error('get coin name error. return code is %s, error occur: %s', rst['code'], rst['msg'])
+                raise Exception('get coin name error')
+            coin_names = [i for i in {j['instId'] for j in rst['data'] if ('usdt' in j['instId'].lower() and j['instType'] == 'SWAP' and ('test' not in j['instId'].lower()))}]
+            coin_names.sort()
+        except Exception as e:
+            logger.exception('get all coin name via public data api error: %s', e)
+            retry_count += 1
+            time.sleep(5)
+            continue
         publicdata_api.close()
         return coin_names
 

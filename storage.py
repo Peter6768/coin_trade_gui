@@ -42,7 +42,8 @@ class DB:
         self.ontime_kline_col_name_map = {
             'timestamp': '时间', 'coin_type': '币种名称', 'begin_price': '5M开盘', 'max_price': '5M最高',
             'min_price': '5M最低', 'last_price': '5M收盘', 'today_max': '今日最高', 'today_min': '今日最低',
-            'today_delta': '今日间隔','dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值'
+            'today_delta': '今日间隔', 'dot_neg_num': '点阵负值', 'dot_pos_num': '点阵正值', 'dot_final': '点阵终值',
+            'log': '公式设置点位报告'
         }
 
         if not path.exists(db_path):
@@ -110,7 +111,8 @@ class DB:
         dot_pos_num integer,
         dot_final integer,
         dot_key_value integer,
-        dot_op_type text);
+        dot_op_type text,
+        log text);
         '''
         self.execute(cmd)
 
